@@ -79,41 +79,29 @@ Future<(int, int)> _pumpsAround(
 
 void main() {
   // WITNESS. Before the fix this read (1, 1).
-  test(
-    'resetStream disposes the stream outgoing pump',
-    () async {
-      final (before, after) = await _pumpsAround(
-        (t, id) => t.resetStream(id, reason: 'test').then((_) {}),
-      );
+  test('resetStream disposes the stream outgoing pump', () async {
+    final (before, after) = await _pumpsAround(
+      (t, id) => t.resetStream(id, reason: 'test').then((_) {}),
+    );
 
-      expect(
-        before,
-        1,
-        reason: 'the arm needs a pump to exist before the reset',
-      );
-      expect(
-        after,
-        0,
-        reason:
-            'cancelling a call goes through resetStream; leaving the pump behind '
-            'holds whatever was queued on a stream that no longer exists',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(before, 1, reason: 'the arm needs a pump to exist before the reset');
+    expect(
+      after,
+      0,
+      reason:
+          'cancelling a call goes through resetStream; leaving the pump behind '
+          'holds whatever was queued on a stream that no longer exists',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   // CONTROL. The sibling that always disposed it. If this ever reads (1, 1) the
   // harness stopped creating pumps and the witness above proves nothing.
-  test(
-    'CONTROL: releaseStreamId disposes it too, as it always did',
-    () async {
-      final (before, after) = await _pumpsAround(
-        (t, id) async => t.releaseStreamId(id),
-      );
+  test('CONTROL: releaseStreamId disposes it too, as it always did', () async {
+    final (before, after) = await _pumpsAround(
+      (t, id) async => t.releaseStreamId(id),
+    );
 
-      expect(before, 1);
-      expect(after, 0);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(before, 1);
+    expect(after, 0);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

@@ -88,99 +88,85 @@ void main() {
     await http.close(force: true);
   });
 
-  test(
-    'the server does not negotiate permessage-deflate by default',
-    () async {
-      http = await HttpServer.bind('127.0.0.1', 0);
-      server = RpcWebSocketServer(
-        connections: rpcWebSocketConnections(http),
-        mode: RpcResponderMode((e) {}),
-      );
-      await server.start();
+  test('the server does not negotiate permessage-deflate by default', () async {
+    http = await HttpServer.bind('127.0.0.1', 0);
+    server = RpcWebSocketServer(
+      connections: rpcWebSocketConnections(http),
+      mode: RpcResponderMode((e) {}),
+    );
+    await server.start();
 
-      final headers = await upgradeOfferingDeflate(http.port);
+    final headers = await upgradeOfferingDeflate(http.port);
 
-      // The upgrade still succeeds...
-      expect(
-        headers['upgrade']?.toLowerCase(),
-        'websocket',
-        reason: 'the handshake must still complete, just without compression',
-      );
-      // ...but permessage-deflate must NOT be accepted, or dart:io would inflate
-      // incoming messages unbounded.
-      expect(
-        headers['sec-websocket-extensions'],
-        anyOf(isNull, isNot(contains('permessage-deflate'))),
-        reason:
-            'the server negotiated permessage-deflate, re-opening the '
-            'decompression-bomb: a few hundred KiB on the wire inflates to '
-            'hundreds of MiB of RSS before any rpc_dart limit can see it',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    // The upgrade still succeeds...
+    expect(
+      headers['upgrade']?.toLowerCase(),
+      'websocket',
+      reason: 'the handshake must still complete, just without compression',
+    );
+    // ...but permessage-deflate must NOT be accepted, or dart:io would inflate
+    // incoming messages unbounded.
+    expect(
+      headers['sec-websocket-extensions'],
+      anyOf(isNull, isNot(contains('permessage-deflate'))),
+      reason:
+          'the server negotiated permessage-deflate, re-opening the '
+          'decompression-bomb: a few hundred KiB on the wire inflates to '
+          'hundreds of MiB of RSS before any rpc_dart limit can see it',
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
-  test(
-    'GUARD: opting compression back in negotiates it',
-    () async {
-      // Proves the parameter still works for peers you control, and that the
-      // witness above is really keyed on the negotiation rather than always
-      // absent.
-      http = await HttpServer.bind('127.0.0.1', 0);
-      server = RpcWebSocketServer(
-        connections: rpcWebSocketConnections(
-          http,
-          compression: CompressionOptions.compressionDefault,
-        ),
-        mode: RpcResponderMode((e) {}),
-      );
-      await server.start();
+  test('GUARD: opting compression back in negotiates it', () async {
+    // Proves the parameter still works for peers you control, and that the
+    // witness above is really keyed on the negotiation rather than always
+    // absent.
+    http = await HttpServer.bind('127.0.0.1', 0);
+    server = RpcWebSocketServer(
+      connections: rpcWebSocketConnections(
+        http,
+        compression: CompressionOptions.compressionDefault,
+      ),
+      mode: RpcResponderMode((e) {}),
+    );
+    await server.start();
 
-      final headers = await upgradeOfferingDeflate(http.port);
-      expect(
-        headers['sec-websocket-extensions'],
-        contains('permessage-deflate'),
-        reason: 'an explicit opt-in must still enable compression',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    final headers = await upgradeOfferingDeflate(http.port);
+    expect(
+      headers['sec-websocket-extensions'],
+      contains('permessage-deflate'),
+      reason: 'an explicit opt-in must still enable compression',
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
-  test(
-    'GUARD: an ordinary RPC call works with compression off',
-    () async {
-      final codec = RpcCodec(RpcString.fromJson);
-      http = await HttpServer.bind('127.0.0.1', 0);
-      server = RpcWebSocketServer(
-        connections: rpcWebSocketConnections(http),
-        mode: RpcResponderMode(
-          (e) => e.registerServiceContract(_EchoContract()),
-        ),
-      );
-      await server.start();
+  test('GUARD: an ordinary RPC call works with compression off', () async {
+    final codec = RpcCodec(RpcString.fromJson);
+    http = await HttpServer.bind('127.0.0.1', 0);
+    server = RpcWebSocketServer(
+      connections: rpcWebSocketConnections(http),
+      mode: RpcResponderMode((e) => e.registerServiceContract(_EchoContract())),
+    );
+    await server.start();
 
-      final transport = await RpcWebSocketCallerTransport.connect(
-        Uri.parse('ws://127.0.0.1:${http.port}'),
-      );
-      final caller = RpcCallerEndpoint(transport: transport);
-      addTearDown(() async {
-        await caller.close().catchError((Object _) {});
-        await transport.close().catchError((Object _) {});
-      });
+    final transport = await RpcWebSocketCallerTransport.connect(
+      Uri.parse('ws://127.0.0.1:${http.port}'),
+    );
+    final caller = RpcCallerEndpoint(transport: transport);
+    addTearDown(() async {
+      await caller.close().catchError((Object _) {});
+      await transport.close().catchError((Object _) {});
+    });
 
-      final r = await caller
-          .unary<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'Echo',
-            request: 'ping'.rpc,
-            requestCodec: codec,
-            responseCodec: codec,
-          )
-          .timeout(const Duration(seconds: 8));
-      expect(r.value, 'echo-ping');
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    final r = await caller
+        .unary<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'Echo',
+          request: 'ping'.rpc,
+          requestCodec: codec,
+          responseCodec: codec,
+        )
+        .timeout(const Duration(seconds: 8));
+    expect(r.value, 'echo-ping');
+  }, timeout: const Timeout(Duration(seconds: 30)));
 }
 
 final class _EchoContract extends RpcResponderContract {

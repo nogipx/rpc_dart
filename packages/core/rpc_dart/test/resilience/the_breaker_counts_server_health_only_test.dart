@@ -126,27 +126,23 @@ void main() {
       // No pushback: a message over the size limit, the caller's own doing.
       ('RESOURCE_EXHAUSTED without pushback', RpcStatus.resourceExhausted),
     ]) {
-      test(
-        '$name does not open the breaker',
-        () async {
-          final out = await _fiveFailuresThenHealthy(status);
+      test('$name does not open the breaker', () async {
+        final out = await _fiveFailuresThenHealthy(status);
 
-          expect(
-            out.state,
-            RpcCircuitBreakerState.closed,
-            reason:
-                'five $name answers are a working server, and opening on them '
-                'blocks every other method on the endpoint',
-          );
-          expect(out.failures, 0);
-          expect(
-            out.healthy,
-            'ok:x',
-            reason: 'an unrelated healthy method was refused',
-          );
-        },
-        timeout: const Timeout(Duration(seconds: 30)),
-      );
+        expect(
+          out.state,
+          RpcCircuitBreakerState.closed,
+          reason:
+              'five $name answers are a working server, and opening on them '
+              'blocks every other method on the endpoint',
+        );
+        expect(out.failures, 0);
+        expect(
+          out.healthy,
+          'ok:x',
+          reason: 'an unrelated healthy method was refused',
+        );
+      }, timeout: const Timeout(Duration(seconds: 30)));
     }
   });
 
@@ -176,81 +172,73 @@ void main() {
     }
   });
 
-  test(
-    'GUARD: an error with no status still counts',
-    () async {
-      // An error carrying no status is not an application answering; it is
-      // something failing, and the default must not read "unclassifiable" as
-      // benign. A codec that throws on decode is the cheapest such error: it
-      // arrives as a bare StateError, measured in
-      // `.dart_tool/probe/b110_what_error.dart`.
-      final (client, server) = RpcChannelTransport.pair();
-      final responder = RpcResponderEndpoint(transport: server)
-        ..registerServiceContract(_Healthy()..setup())
-        ..start();
-      final caller = RpcCallerEndpoint(transport: client);
-      final breaker = RpcCircuitBreakerInterceptor(failureThreshold: 2);
-      caller.addInterceptor(breaker);
-      addTearDown(() async {
-        await caller.close();
-        await responder.close();
-      });
+  test('GUARD: an error with no status still counts', () async {
+    // An error carrying no status is not an application answering; it is
+    // something failing, and the default must not read "unclassifiable" as
+    // benign. A codec that throws on decode is the cheapest such error: it
+    // arrives as a bare StateError, measured in
+    // `.dart_tool/probe/b110_what_error.dart`.
+    final (client, server) = RpcChannelTransport.pair();
+    final responder = RpcResponderEndpoint(transport: server)
+      ..registerServiceContract(_Healthy()..setup())
+      ..start();
+    final caller = RpcCallerEndpoint(transport: client);
+    final breaker = RpcCircuitBreakerInterceptor(failureThreshold: 2);
+    caller.addInterceptor(breaker);
+    addTearDown(() async {
+      await caller.close();
+      await responder.close();
+    });
 
-      for (var i = 0; i < 2; i++) {
-        try {
-          await caller.unary<RpcString, RpcString>(
-            serviceName: 'Healthy',
-            methodName: 'ok',
-            request: 'x'.rpc,
-            requestCodec: _codec,
-            responseCodec: RpcCodec<RpcString>((_) => throw StateError('boom')),
-          );
-        } catch (_) {}
-      }
+    for (var i = 0; i < 2; i++) {
+      try {
+        await caller.unary<RpcString, RpcString>(
+          serviceName: 'Healthy',
+          methodName: 'ok',
+          request: 'x'.rpc,
+          requestCodec: _codec,
+          responseCodec: RpcCodec<RpcString>((_) => throw StateError('boom')),
+        );
+      } catch (_) {}
+    }
 
-      expect(
-        breaker.failureCount,
-        greaterThanOrEqualTo(2),
-        reason: 'an error with no status is not a server answering correctly',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(
+      breaker.failureCount,
+      greaterThanOrEqualTo(2),
+      reason: 'an error with no status is not a server answering correctly',
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
-  test(
-    'GUARD: an explicit failureOn still replaces the default',
-    () async {
-      final (client, server) = RpcChannelTransport.pair();
-      final responder = RpcResponderEndpoint(transport: server)
-        ..registerServiceContract(_Svc(RpcStatus.notFound)..setup())
-        ..start();
-      final caller = RpcCallerEndpoint(transport: client);
-      // Counts EVERYTHING, which is what the old default did — a caller who wants
-      // that must still be able to ask for it.
-      final breaker = RpcCircuitBreakerInterceptor(
-        failureThreshold: 5,
-        failureOn: (_) => true,
-      );
-      caller.addInterceptor(breaker);
-      addTearDown(() async {
-        await caller.close();
-        await responder.close();
-      });
+  test('GUARD: an explicit failureOn still replaces the default', () async {
+    final (client, server) = RpcChannelTransport.pair();
+    final responder = RpcResponderEndpoint(transport: server)
+      ..registerServiceContract(_Svc(RpcStatus.notFound)..setup())
+      ..start();
+    final caller = RpcCallerEndpoint(transport: client);
+    // Counts EVERYTHING, which is what the old default did — a caller who wants
+    // that must still be able to ask for it.
+    final breaker = RpcCircuitBreakerInterceptor(
+      failureThreshold: 5,
+      failureOn: (_) => true,
+    );
+    caller.addInterceptor(breaker);
+    addTearDown(() async {
+      await caller.close();
+      await responder.close();
+    });
 
-      for (var i = 0; i < 5; i++) {
-        try {
-          await caller.unary<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'lookup',
-            request: 'x'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          );
-        } catch (_) {}
-      }
+    for (var i = 0; i < 5; i++) {
+      try {
+        await caller.unary<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'lookup',
+          request: 'x'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        );
+      } catch (_) {}
+    }
 
-      expect(breaker.state, RpcCircuitBreakerState.open);
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(breaker.state, RpcCircuitBreakerState.open);
+  }, timeout: const Timeout(Duration(seconds: 30)));
 }

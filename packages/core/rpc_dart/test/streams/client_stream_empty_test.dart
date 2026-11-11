@@ -131,11 +131,9 @@ void main() {
           .timeout(const Duration(seconds: 5));
 
       expect(result.value, 'got:2');
-      expect(
-        _handlerRuns,
-        ['collect'],
-        reason: 'the handler ran more than once -- duplicate call open',
-      );
+      expect(_handlerRuns, [
+        'collect',
+      ], reason: 'the handler ran more than once -- duplicate call open');
       await _teardown(rig);
     });
 

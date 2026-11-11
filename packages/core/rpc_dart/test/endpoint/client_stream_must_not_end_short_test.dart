@@ -68,73 +68,69 @@ final class _SlowCollector extends RpcResponderContract {
 }
 
 void main() {
-  test(
-    'a stream does not end while a message is still unsent',
-    () async {
-      final (clientT, serverT) = RpcChannelTransport.pair(policy: _policy);
-      final service = _SlowCollector(startupDelay: const Duration(seconds: 2));
-      final responder = RpcResponderEndpoint(transport: serverT);
-      responder.registerServiceContract(service);
-      responder.start();
-      final caller = RpcCallerEndpoint(transport: clientT);
+  test('a stream does not end while a message is still unsent', () async {
+    final (clientT, serverT) = RpcChannelTransport.pair(policy: _policy);
+    final service = _SlowCollector(startupDelay: const Duration(seconds: 2));
+    final responder = RpcResponderEndpoint(transport: serverT);
+    responder.registerServiceContract(service);
+    responder.start();
+    final caller = RpcCallerEndpoint(transport: clientT);
 
-      // A blob the size of the ones that failed: ~3 MB, twelve frames of 256 KiB,
-      // pushed at a handler that is busy writing the previous one to storage.
-      const count = 12;
-      final filler = 'x' * _frameBytes;
-      final requests = StreamController<RpcString>();
-      final answer = caller.clientStream<RpcString, RpcString>(
-        serviceName: 'Blob',
-        methodName: 'Upload',
-        requestCodec: _codec,
-        responseCodec: _codec,
-        requests: requests.stream,
+    // A blob the size of the ones that failed: ~3 MB, twelve frames of 256 KiB,
+    // pushed at a handler that is busy writing the previous one to storage.
+    const count = 12;
+    final filler = 'x' * _frameBytes;
+    final requests = StreamController<RpcString>();
+    final answer = caller.clientStream<RpcString, RpcString>(
+      serviceName: 'Blob',
+      methodName: 'Upload',
+      requestCodec: _codec,
+      responseCodec: _codec,
+      requests: requests.stream,
+    );
+
+    for (var i = 0; i < count; i++) {
+      requests.add(RpcString('frame$i:$filler'));
+    }
+    await requests.close();
+
+    Object? failure;
+    String? value;
+    try {
+      value = (await answer.timeout(const Duration(seconds: 30))).value;
+    } catch (e) {
+      failure = e;
+    }
+
+    // The point of the test, in one sentence: a call that came back successful
+    // must mean the handler got everything. The consumer's server could only
+    // tell that it had not by counting bytes itself — and by then it had
+    // already refused a blob the client believed it had sent.
+    if (failure == null) {
+      expect(
+        service.seen,
+        hasLength(count),
+        reason:
+            'the call succeeded (answer "$value") but the handler was given '
+            '${service.seen.length} of $count frames — the stream ended over a '
+            'message that never went out',
       );
+    } else {
+      // Failing is allowed. Hanging until a timeout is not: the caller has to
+      // be able to find out, and a 26 MB upload that stalls forever is the
+      // stall a consumer actually reported.
+      expect(
+        failure,
+        isNot(isA<TimeoutException>()),
+        reason: 'the caller was left hanging instead of being told: $failure',
+      );
+    }
 
-      for (var i = 0; i < count; i++) {
-        requests.add(RpcString('frame$i:$filler'));
-      }
-      await requests.close();
-
-      Object? failure;
-      String? value;
-      try {
-        value = (await answer.timeout(const Duration(seconds: 30))).value;
-      } catch (e) {
-        failure = e;
-      }
-
-      // The point of the test, in one sentence: a call that came back successful
-      // must mean the handler got everything. The consumer's server could only
-      // tell that it had not by counting bytes itself — and by then it had
-      // already refused a blob the client believed it had sent.
-      if (failure == null) {
-        expect(
-          service.seen,
-          hasLength(count),
-          reason:
-              'the call succeeded (answer "$value") but the handler was given '
-              '${service.seen.length} of $count frames — the stream ended over a '
-              'message that never went out',
-        );
-      } else {
-        // Failing is allowed. Hanging until a timeout is not: the caller has to
-        // be able to find out, and a 26 MB upload that stalls forever is the
-        // stall a consumer actually reported.
-        expect(
-          failure,
-          isNot(isA<TimeoutException>()),
-          reason: 'the caller was left hanging instead of being told: $failure',
-        );
-      }
-
-      await caller.close();
-      await responder.close();
-      await clientT.close();
-      await serverT.close();
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    await caller.close();
+    await responder.close();
+    await clientT.close();
+    await serverT.close();
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   test(
     'CONTROL: the same upload is intact when the handler reads at once',

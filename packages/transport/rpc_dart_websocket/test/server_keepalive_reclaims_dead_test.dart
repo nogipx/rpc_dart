@@ -192,88 +192,76 @@ void main() {
     }
   }
 
-  test(
-    'keepalive reclaims endpoints stranded by a dead path',
-    () async {
-      await stranded(pingInterval: const Duration(seconds: 2));
+  test('keepalive reclaims endpoints stranded by a dead path', () async {
+    await stranded(pingInterval: const Duration(seconds: 2));
 
-      await pollUntil(() => endpoints.isEmpty && _contractsDisposed == 3);
+    await pollUntil(() => endpoints.isEmpty && _contractsDisposed == 3);
 
-      expect(
-        endpoints,
-        isEmpty,
-        reason:
-            'without keepalive the server holds every half-open connection, and '
-            'nothing ever reclaims it',
-      );
-      expect(
-        _contractsDisposed,
-        3,
-        reason:
-            'a contract that is never disposed keeps what it owns -- db handles, '
-            'caches, subscriptions -- for the life of the process',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    expect(
+      endpoints,
+      isEmpty,
+      reason:
+          'without keepalive the server holds every half-open connection, and '
+          'nothing ever reclaims it',
+    );
+    expect(
+      _contractsDisposed,
+      3,
+      reason:
+          'a contract that is never disposed keeps what it owns -- db handles, '
+          'caches, subscriptions -- for the life of the process',
+    );
+  }, timeout: const Timeout(Duration(seconds: 90)));
 
-  test(
-    'CONTROL: without keepalive they are held indefinitely',
-    () async {
-      // Documents the default and is what makes the test above meaningful.
-      await stranded();
+  test('CONTROL: without keepalive they are held indefinitely', () async {
+    // Documents the default and is what makes the test above meaningful.
+    await stranded();
 
-      await pollUntil(
-        () => endpoints.isEmpty,
-        budget: const Duration(seconds: 12),
-      );
+    await pollUntil(
+      () => endpoints.isEmpty,
+      budget: const Duration(seconds: 12),
+    );
 
-      expect(endpoints, hasLength(3));
-      expect(_contractsDisposed, 0);
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    expect(endpoints, hasLength(3));
+    expect(_contractsDisposed, 0);
+  }, timeout: const Timeout(Duration(seconds: 90)));
 
-  test(
-    'GUARD: keepalive does not disturb a live connection',
-    () async {
-      http = await HttpServer.bind('127.0.0.1', 0);
-      rpcWebSocketConnections(
-        http,
-        pingInterval: const Duration(seconds: 1),
-      ).listen((channel) {
-        final transport = RpcWebSocketResponderTransport(channel);
-        final endpoint = RpcResponderEndpoint(transport: transport);
-        endpoint.registerServiceContract(_Contract());
-        endpoint.start();
-        endpoints.add(endpoint);
-      });
-      relay = _FreezableRelay(http.port);
-      await relay.start();
+  test('GUARD: keepalive does not disturb a live connection', () async {
+    http = await HttpServer.bind('127.0.0.1', 0);
+    rpcWebSocketConnections(
+      http,
+      pingInterval: const Duration(seconds: 1),
+    ).listen((channel) {
+      final transport = RpcWebSocketResponderTransport(channel);
+      final endpoint = RpcResponderEndpoint(transport: transport);
+      endpoint.registerServiceContract(_Contract());
+      endpoint.start();
+      endpoints.add(endpoint);
+    });
+    relay = _FreezableRelay(http.port);
+    await relay.start();
 
-      final t = await RpcWebSocketCallerTransport.connect(
-        Uri.parse('ws://127.0.0.1:${relay.port}'),
-      );
-      transports.add(t);
-      final caller = RpcCallerEndpoint(transport: t);
+    final t = await RpcWebSocketCallerTransport.connect(
+      Uri.parse('ws://127.0.0.1:${relay.port}'),
+    );
+    transports.add(t);
+    final caller = RpcCallerEndpoint(transport: t);
 
-      // Well past several ping intervals, the connection must still serve.
-      for (var i = 0; i < 4; i++) {
-        final r = await caller
-            .unary<RpcString, RpcString>(
-              serviceName: 'Svc',
-              methodName: 'Echo',
-              request: 'x'.rpc,
-              requestCodec: _codec,
-              responseCodec: _codec,
-            )
-            .timeout(const Duration(seconds: 8));
-        expect(r.value, 'echo-ok');
-        await Future<void>.delayed(const Duration(milliseconds: 900));
-      }
-      expect(endpoints, hasLength(1));
-      expect(_contractsDisposed, 0);
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    // Well past several ping intervals, the connection must still serve.
+    for (var i = 0; i < 4; i++) {
+      final r = await caller
+          .unary<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: 'Echo',
+            request: 'x'.rpc,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .timeout(const Duration(seconds: 8));
+      expect(r.value, 'echo-ok');
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+    }
+    expect(endpoints, hasLength(1));
+    expect(_contractsDisposed, 0);
+  }, timeout: const Timeout(Duration(seconds: 90)));
 }

@@ -89,66 +89,54 @@ void main() {
     return call;
   }
 
-  test(
-    'a drained stop lets an in-flight request finish',
-    () async {
-      final call = await startSlowCall();
+  test('a drained stop lets an in-flight request finish', () async {
+    final call = await startSlowCall();
 
-      await server.stop(drainTimeout: const Duration(seconds: 10));
+    await server.stop(drainTimeout: const Duration(seconds: 10));
 
-      expect(
-        await call.timeout(const Duration(seconds: 20)),
-        'returned finished',
-        reason:
-            'the whole point of a drain is that the request completes instead of '
-            'being cut off -- and that it is ANSWERED, not merely left running',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      await call.timeout(const Duration(seconds: 20)),
+      'returned finished',
+      reason:
+          'the whole point of a drain is that the request completes instead of '
+          'being cut off -- and that it is ANSWERED, not merely left running',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'a second stop during a drain waits for it',
-    () async {
-      final call = await startSlowCall();
+  test('a second stop during a drain waits for it', () async {
+    final call = await startSlowCall();
 
-      var first = false;
-      final draining = server
-          .stop(drainTimeout: const Duration(seconds: 10))
-          .then((_) => first = true);
-      await server.stop(drainTimeout: const Duration(seconds: 10));
+    var first = false;
+    final draining = server
+        .stop(drainTimeout: const Duration(seconds: 10))
+        .then((_) => first = true);
+    await server.stop(drainTimeout: const Duration(seconds: 10));
 
-      expect(
-        first,
-        isTrue,
-        reason: 'the second stop returned while the first was still draining',
-      );
-      await draining;
-      expect(await call, 'returned finished');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      first,
+      isTrue,
+      reason: 'the second stop returned while the first was still draining',
+    );
+    await draining;
+    expect(await call, 'returned finished');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'a restart during a drain is stopped by the next stop',
-    () async {
-      final call = await startSlowCall();
+  test('a restart during a drain is stopped by the next stop', () async {
+    final call = await startSlowCall();
 
-      final draining = server.stop(drainTimeout: const Duration(seconds: 10));
-      await server.start();
-      await server.afterModulesStart();
-      await server.stop();
+    final draining = server.stop(drainTimeout: const Duration(seconds: 10));
+    await server.start();
+    await server.afterModulesStart();
+    await server.stop();
 
-      expect(
-        server.isRunning,
-        isFalse,
-        reason: 'the last stop returned the first stop and left this running',
-      );
-      await draining;
-      expect(await call, 'returned finished');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      server.isRunning,
+      isFalse,
+      reason: 'the last stop returned the first stop and left this running',
+    );
+    await draining;
+    expect(await call, 'returned finished');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   test(
     'CONTROL: without a drain the request is cut off, but correctly',

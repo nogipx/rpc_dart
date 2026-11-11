@@ -153,38 +153,30 @@ void main() {
     );
   }, timeout: const Timeout(Duration(seconds: 90)));
 
-  test(
-    'GUARD: a permitted origin still upgrades',
-    () async {
-      // Without this the witness would pass on a server that refused everything.
-      var upgraded = 0;
-      final port = await _serve(onUpgrade: () => upgraded++);
+  test('GUARD: a permitted origin still upgrades', () async {
+    // Without this the witness would pass on a server that refused everything.
+    var upgraded = 0;
+    final port = await _serve(onUpgrade: () => upgraded++);
 
-      final settled = await _settleAll([
-        for (var i = 0; i < _sockets; i++)
-          _slowBody(port, _allowed, upgrade: true),
-      ]);
+    final settled = await _settleAll([
+      for (var i = 0; i < _sockets; i++)
+        _slowBody(port, _allowed, upgrade: true),
+    ]);
 
-      expect(settled, everyElement(contains('101')));
-      expect(upgraded, _sockets);
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    expect(settled, everyElement(contains('101')));
+    expect(upgraded, _sockets);
+  }, timeout: const Timeout(Duration(seconds: 90)));
 
-  test(
-    'GUARD: a refused upgrade still gets its 403',
-    () async {
-      // The bound must not cost an ordinary refusal its status. dart:io gives a
-      // connection-upgrade request no body, so this one drains instantly.
-      final port = await _serve(onUpgrade: () {});
+  test('GUARD: a refused upgrade still gets its 403', () async {
+    // The bound must not cost an ordinary refusal its status. dart:io gives a
+    // connection-upgrade request no body, so this one drains instantly.
+    final port = await _serve(onUpgrade: () {});
 
-      final settled = await _settleAll([
-        for (var i = 0; i < _sockets; i++)
-          _slowBody(port, _rejected, upgrade: true),
-      ]);
+    final settled = await _settleAll([
+      for (var i = 0; i < _sockets; i++)
+        _slowBody(port, _rejected, upgrade: true),
+    ]);
 
-      expect(settled, everyElement(contains('403')));
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    expect(settled, everyElement(contains('403')));
+  }, timeout: const Timeout(Duration(seconds: 90)));
 }

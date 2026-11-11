@@ -171,33 +171,29 @@ Future<({int dispatched, int refused})> _openParkedCalls(
 }
 
 void main() {
-  test(
-    'WITNESS: the advertised stream limit is the policy limit',
-    () async {
-      var parked = 0;
-      final server = RpcHttp2Server(
-        host: '127.0.0.1',
-        port: 0,
-        policy: const RpcSecurityPolicy(maxActiveStreams: 7),
-        mode: RpcResponderMode(
-          (e) => e.registerServiceContract(_Svc(() => parked++)),
-        ),
-      );
-      await server.start();
-      addTearDown(server.stop);
+  test('WITNESS: the advertised stream limit is the policy limit', () async {
+    var parked = 0;
+    final server = RpcHttp2Server(
+      host: '127.0.0.1',
+      port: 0,
+      policy: const RpcSecurityPolicy(maxActiveStreams: 7),
+      mode: RpcResponderMode(
+        (e) => e.registerServiceContract(_Svc(() => parked++)),
+      ),
+    );
+    await server.start();
+    addTearDown(server.stop);
 
-      final settings = await readServerSettings(server.port);
+    final settings = await readServerSettings(server.port);
 
-      expect(
-        settings[_maxConcurrentStreams],
-        7,
-        reason:
-            'the server advertised ${settings[_maxConcurrentStreams]} while it '
-            'refuses everything past 7',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      settings[_maxConcurrentStreams],
+      7,
+      reason:
+          'the server advertised ${settings[_maxConcurrentStreams]} while it '
+          'refuses everything past 7',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   group('the announcement stays honest at the edges of the field', () {
     // SETTINGS_MAX_CONCURRENT_STREAMS is a uint32 and RpcSecurityPolicy has no

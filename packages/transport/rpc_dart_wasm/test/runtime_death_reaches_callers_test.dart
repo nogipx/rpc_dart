@@ -82,103 +82,87 @@ final class _Svc extends RpcResponderContract {
 }
 
 void main() {
-  test(
-    'a unary call in flight is answered when the runtime dies',
-    () async {
-      // WITNESS: pre-fix this waited out the 5 s and reported HANGS.
-      final rig = _rig();
-      final call = rig.caller.unary<RpcString, RpcString>(
-        serviceName: 'Svc',
-        methodName: 'Slow',
-        request: 'hi'.rpc,
-        requestCodec: _codec,
-        responseCodec: _codec,
-      );
+  test('a unary call in flight is answered when the runtime dies', () async {
+    // WITNESS: pre-fix this waited out the 5 s and reported HANGS.
+    final rig = _rig();
+    final call = rig.caller.unary<RpcString, RpcString>(
+      serviceName: 'Svc',
+      methodName: 'Slow',
+      request: 'hi'.rpc,
+      requestCodec: _codec,
+      responseCodec: _codec,
+    );
 
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-      rig.host.killRuntime('content_process_terminated');
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    rig.host.killRuntime('content_process_terminated');
 
-      await expectLater(
-        call.timeout(const Duration(seconds: 5)),
-        throwsA(isA<RpcStatusException>()),
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    await expectLater(
+      call.timeout(const Duration(seconds: 5)),
+      throwsA(isA<RpcStatusException>()),
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
-  test(
-    'a server stream in flight is ended when the runtime dies',
-    () async {
-      // WITNESS: the stream stayed open forever, so `await for` never returned.
-      final rig = _rig();
-      final items = <String>[];
-      final done = Completer<Object?>();
-      rig.caller
-          .serverStream<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'Firehose',
-            request: 'go'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          )
-          .listen(
-            (v) => items.add(v.value),
-            onError: (Object e) {
-              if (!done.isCompleted) done.complete(e);
-            },
-            onDone: () {
-              if (!done.isCompleted) done.complete(null);
-            },
-          );
+  test('a server stream in flight is ended when the runtime dies', () async {
+    // WITNESS: the stream stayed open forever, so `await for` never returned.
+    final rig = _rig();
+    final items = <String>[];
+    final done = Completer<Object?>();
+    rig.caller
+        .serverStream<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'Firehose',
+          request: 'go'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .listen(
+          (v) => items.add(v.value),
+          onError: (Object e) {
+            if (!done.isCompleted) done.complete(e);
+          },
+          onDone: () {
+            if (!done.isCompleted) done.complete(null);
+          },
+        );
 
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-      expect(
-        items,
-        isNotEmpty,
-        reason: 'the stream must be live before the kill',
-      );
-      rig.host.killRuntime();
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(
+      items,
+      isNotEmpty,
+      reason: 'the stream must be live before the kill',
+    );
+    rig.host.killRuntime();
 
-      final outcome = await done.future.timeout(const Duration(seconds: 5));
-      expect(
-        outcome,
-        isNotNull,
-        reason: 'ended silently instead of with a cause',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    final outcome = await done.future.timeout(const Duration(seconds: 5));
+    expect(
+      outcome,
+      isNotNull,
+      reason: 'ended silently instead of with a cause',
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
-  test(
-    'the bridge reports itself closed after the runtime dies',
-    () async {
-      // Otherwise a caller that checks before dialling reuses a dead bridge.
-      final rig = _rig();
-      expect(rig.host.isClosed, isFalse);
-      rig.host.killRuntime();
-      expect(rig.host.isClosed, isTrue);
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+  test('the bridge reports itself closed after the runtime dies', () async {
+    // Otherwise a caller that checks before dialling reuses a dead bridge.
+    final rig = _rig();
+    expect(rig.host.isClosed, isFalse);
+    rig.host.killRuntime();
+    expect(rig.host.isClosed, isTrue);
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
-  test(
-    'GUARD: a live runtime still serves calls',
-    () async {
-      // Pairs with the witnesses: the death path must not fire on its own, or
-      // the first two tests would pass on a transport that failed everything.
-      final rig = _rig();
-      final r = await rig.caller
-          .unary<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'Fast',
-            request: 'hi'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          )
-          .timeout(const Duration(seconds: 5));
-      expect(r.value, 'pong');
-      expect(rig.host.isClosed, isFalse);
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+  test('GUARD: a live runtime still serves calls', () async {
+    // Pairs with the witnesses: the death path must not fire on its own, or
+    // the first two tests would pass on a transport that failed everything.
+    final rig = _rig();
+    final r = await rig.caller
+        .unary<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'Fast',
+          request: 'hi'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .timeout(const Duration(seconds: 5));
+    expect(r.value, 'pong');
+    expect(rig.host.isClosed, isFalse);
+  }, timeout: const Timeout(Duration(seconds: 30)));
 }

@@ -150,40 +150,36 @@ void main() {
     );
   });
 
-  test(
-    "WITNESS: a dead call's half-close does not end a live call",
-    () async {
-      final rig = await _connect();
+  test("WITNESS: a dead call's half-close does not end a live call", () async {
+    final rig = await _connect();
 
-      final idA = await _openCall(rig.client);
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+    final idA = await _openCall(rig.client);
+    await Future<void>.delayed(const Duration(milliseconds: 200));
 
-      await rig.reconnect();
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+    await rig.reconnect();
+    await Future<void>.delayed(const Duration(milliseconds: 200));
 
-      await _openCall(rig.client);
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      // A BASELINE, not zero: dropping the first connection ends A's own
-      // handler server-side, which is correct and has nothing to do with B.
-      final baseline = rig.ended();
+    await _openCall(rig.client);
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    // A BASELINE, not zero: dropping the first connection ends A's own
+    // handler server-side, which is correct and has nothing to do with B.
+    final baseline = rig.ended();
 
-      // A's teardown, arriving after the reconnect. This is the line every
-      // client-stream and bidirectional caller runs when it is done sending,
-      // and an application that reconnects on drop and cancels its old
-      // subscriptions afterwards produces exactly this ordering.
-      await rig.client.finishSending(idA);
-      await Future<void>.delayed(const Duration(milliseconds: 500));
+    // A's teardown, arriving after the reconnect. This is the line every
+    // client-stream and bidirectional caller runs when it is done sending,
+    // and an application that reconnects on drop and cancels its old
+    // subscriptions afterwards produces exactly this ordering.
+    await rig.client.finishSending(idA);
+    await Future<void>.delayed(const Duration(milliseconds: 500));
 
-      expect(
-        rig.ended(),
-        baseline,
-        reason:
-            "a dead call half-closed the live call's request stream and the "
-            'server finished serving it',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      rig.ended(),
+      baseline,
+      reason:
+          "a dead call half-closed the live call's request stream and the "
+          'server finished serving it',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   test(
     "WITNESS: a dead call's release does not free a live call's slot",
@@ -240,36 +236,32 @@ void main() {
       );
     });
 
-    test(
-      "does not let a dead call's half-close end a live one",
-      () async {
-        final rig = await _connect();
+    test("does not let a dead call's half-close end a live one", () async {
+      final rig = await _connect();
 
-        final idA = await _openCall(rig.client);
-        await Future<void>.delayed(const Duration(milliseconds: 200));
+      final idA = await _openCall(rig.client);
+      await Future<void>.delayed(const Duration(milliseconds: 200));
 
-        await rig.killPeer();
-        await Future<void>.delayed(const Duration(milliseconds: 200));
+      await rig.killPeer();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
 
-        await _openCall(rig.client);
-        await Future<void>.delayed(const Duration(milliseconds: 300));
-        // A BASELINE, not zero: losing the first connection ends A's own
-        // handler server-side, which is correct and is not about B.
-        final baseline = rig.ended();
+      await _openCall(rig.client);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      // A BASELINE, not zero: losing the first connection ends A's own
+      // handler server-side, which is correct and is not about B.
+      final baseline = rig.ended();
 
-        await rig.client.finishSending(idA);
-        await Future<void>.delayed(const Duration(milliseconds: 500));
+      await rig.client.finishSending(idA);
+      await Future<void>.delayed(const Duration(milliseconds: 500));
 
-        expect(
-          rig.ended(),
-          baseline,
-          reason:
-              "a dead call half-closed the live call's request stream and the "
-              'server finished serving it',
-        );
-      },
-      timeout: const Timeout(Duration(seconds: 60)),
-    );
+      expect(
+        rig.ended(),
+        baseline,
+        reason:
+            "a dead call half-closed the live call's request stream and the "
+            'server finished serving it',
+      );
+    }, timeout: const Timeout(Duration(seconds: 60)));
   });
 
   group('GUARD: the ordinary paths still work', () {

@@ -159,21 +159,17 @@ void main() {
   // Five 8 MiB pushes over loopback: half a second alone, and past the 30 s
   // default when the release gate runs four suites at once, which is where it
   // timed out.
-  test(
-    'the peer cannot repeat the peak on one connection',
-    () async {
-      // The number that matters. The bytes are resident before rpc_dart sees
-      // them -- dart:io buffers a whole message -- so the only lever is
-      // refusing to let it happen twice.
-      final rig = await _serve(maxMessageBytes: 1024 * 1024);
-      expect(
-        await _push(rig, bytes: 8 * 1024 * 1024, count: 5),
-        4413,
-        reason: 'a surviving connection is an unlimited supply of peaks',
-      );
-    },
-    timeout: const Timeout(Duration(minutes: 2)),
-  );
+  test('the peer cannot repeat the peak on one connection', () async {
+    // The number that matters. The bytes are resident before rpc_dart sees
+    // them -- dart:io buffers a whole message -- so the only lever is
+    // refusing to let it happen twice.
+    final rig = await _serve(maxMessageBytes: 1024 * 1024);
+    expect(
+      await _push(rig, bytes: 8 * 1024 * 1024, count: 5),
+      4413,
+      reason: 'a surviving connection is an unlimited supply of peaks',
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
 
   test('GUARD: a message under the limit is accepted', () async {
     // Load-bearing: without it, "closes the connection" would also pass for a

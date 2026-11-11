@@ -19,26 +19,22 @@ import 'package:rpc_notify_redis/rpc_notify_redis.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test(
-    'a connect that would hang forever fails instead',
-    () async {
-      // Non-routable by RFC 5735: the TCP handshake neither completes nor is
-      // refused. A bare Socket.connect waits on this indefinitely.
-      final sw = Stopwatch()..start();
-      await expectLater(
-        RedisNotifyRepository.connect(host: '10.255.255.1', port: 6379),
-        throwsA(anything),
-      );
-      sw.stop();
+  test('a connect that would hang forever fails instead', () async {
+    // Non-routable by RFC 5735: the TCP handshake neither completes nor is
+    // refused. A bare Socket.connect waits on this indefinitely.
+    final sw = Stopwatch()..start();
+    await expectLater(
+      RedisNotifyRepository.connect(host: '10.255.255.1', port: 6379),
+      throwsA(anything),
+    );
+    sw.stop();
 
-      expect(
-        sw.elapsed,
-        lessThan(const Duration(seconds: 25)),
-        reason:
-            'the connect must give up on its own. Unbounded, it strands '
-            'the reconnect latch and the repository never speaks again',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 40)),
-  );
+    expect(
+      sw.elapsed,
+      lessThan(const Duration(seconds: 25)),
+      reason:
+          'the connect must give up on its own. Unbounded, it strands '
+          'the reconnect latch and the repository never speaks again',
+    );
+  }, timeout: const Timeout(Duration(seconds: 40)));
 }

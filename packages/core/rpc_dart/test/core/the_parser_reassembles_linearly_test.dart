@@ -53,39 +53,35 @@ int _reassemble(int bodyBytes) {
 }
 
 void main() {
-  test(
-    'WITNESS: reassembly cost per byte does not grow with the message',
-    () {
-      // Warm up so the measurement does not pay the JIT.
-      _reassemble(256 * 1024);
+  test('WITNESS: reassembly cost per byte does not grow with the message', () {
+    // Warm up so the measurement does not pay the JIT.
+    _reassemble(256 * 1024);
 
-      // ONE arm against an ABSOLUTE bound, not two arms as a ratio.
-      //
-      // The first version of this test compared 16 MiB against 2 MiB and required
-      // the ratio under 24x. It failed once in the full `test:unit` run and
-      // passed alone and on re-run: with fifteen packages' suites in parallel the
-      // two arms are scheduled differently, and a descheduled large arm inflates
-      // the ratio without anything being wrong. `methods/tests.md` item 3 names
-      // exactly this — never compare two independently measured runs as a ratio;
-      // check against one absolute bound.
-      //
-      // The bound is wide on purpose. Measured on this machine: 8 ms fixed,
-      // 1515 ms quadratic. 400 ms is 40x the fixed cost and a quarter of the
-      // quadratic one, so load has to make the machine 40x slower before this
-      // reports a defect, and the defect has to get 4x faster before it hides.
-      final us = _reassemble(16 * 1024 * 1024);
+    // ONE arm against an ABSOLUTE bound, not two arms as a ratio.
+    //
+    // The first version of this test compared 16 MiB against 2 MiB and required
+    // the ratio under 24x. It failed once in the full `test:unit` run and
+    // passed alone and on re-run: with fifteen packages' suites in parallel the
+    // two arms are scheduled differently, and a descheduled large arm inflates
+    // the ratio without anything being wrong. `methods/tests.md` item 3 names
+    // exactly this — never compare two independently measured runs as a ratio;
+    // check against one absolute bound.
+    //
+    // The bound is wide on purpose. Measured on this machine: 8 ms fixed,
+    // 1515 ms quadratic. 400 ms is 40x the fixed cost and a quarter of the
+    // quadratic one, so load has to make the machine 40x slower before this
+    // reports a defect, and the defect has to get 4x faster before it hides.
+    final us = _reassemble(16 * 1024 * 1024);
 
-      expect(
-        us,
-        lessThan(400 * 1000),
-        reason:
-            'reassembling 16 MiB in 16 KiB chunks took ${(us / 1000).toStringAsFixed(0)}ms; '
-            'the quadratic version of this copies the unconsumed tail on every '
-            'chunk and takes about 1515ms, the linear one about 8ms',
-      );
-    },
-    timeout: const Timeout(Duration(minutes: 2)),
-  );
+    expect(
+      us,
+      lessThan(400 * 1000),
+      reason:
+          'reassembling 16 MiB in 16 KiB chunks took ${(us / 1000).toStringAsFixed(0)}ms; '
+          'the quadratic version of this copies the unconsumed tail on every '
+          'chunk and takes about 1515ms, the linear one about 8ms',
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
 
   // GUARD: the limit still refuses, and now refuses BEFORE allocating. Without
   // this the witness would also pass on a parser that had stopped bounding

@@ -250,118 +250,103 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
-  test(
-    'after the flood the connection serves an ordinary call',
-    () async {
-      // Every charge the refused streams held must come back at teardown, or the
-      // connection refuses everything from here on.
-      final r = await _flood(
-        method: 'upload',
-        streams: 8,
-        peerHonoursWindow: false,
-      );
-      expect(r.after, '200', reason: '$r');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('after the flood the connection serves an ordinary call', () async {
+    // Every charge the refused streams held must come back at teardown, or the
+    // connection refuses everything from here on.
+    final r = await _flood(
+      method: 'upload',
+      streams: 8,
+      peerHonoursWindow: false,
+    );
+    expect(r.after, '200', reason: '$r');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'a unary torn down with frames still held returns them',
-    () async {
-      // Frames sent while a unary request is held for its half-close are
-      // charged and never taken; only the stream's teardown can give them back.
-      // Fill the connection that way, let the refusal end the call, then make an
-      // ordinary one.
-      final s = _State();
-      final (clientCh, serverCh) = RpcFrameMultiplexedChannel.pair();
-      final client = RpcChannelTransport(
-        channel: clientCh,
-        isClient: true,
-        policy: const RpcSecurityPolicy(
-          flowControlWindowBytes: null,
-          flowControlConnectionWindowBytes: null,
-          initialSendWindowBytes: null,
-        ),
-      );
-      final server = RpcChannelTransport(
-        channel: serverCh,
-        isClient: false,
-        policy: const RpcSecurityPolicy(
-          flowControlConnectionWindowBytes: _connectionWindow,
-        ),
-      );
-      final responder = RpcResponderEndpoint(transport: server)
-        ..registerServiceContract(_Contract(s))
-        ..start();
-      final caller = RpcCallerEndpoint(transport: client);
+  test('a unary torn down with frames still held returns them', () async {
+    // Frames sent while a unary request is held for its half-close are
+    // charged and never taken; only the stream's teardown can give them back.
+    // Fill the connection that way, let the refusal end the call, then make an
+    // ordinary one.
+    final s = _State();
+    final (clientCh, serverCh) = RpcFrameMultiplexedChannel.pair();
+    final client = RpcChannelTransport(
+      channel: clientCh,
+      isClient: true,
+      policy: const RpcSecurityPolicy(
+        flowControlWindowBytes: null,
+        flowControlConnectionWindowBytes: null,
+        initialSendWindowBytes: null,
+      ),
+    );
+    final server = RpcChannelTransport(
+      channel: serverCh,
+      isClient: false,
+      policy: const RpcSecurityPolicy(
+        flowControlConnectionWindowBytes: _connectionWindow,
+      ),
+    );
+    final responder = RpcResponderEndpoint(transport: server)
+      ..registerServiceContract(_Contract(s))
+      ..start();
+    final caller = RpcCallerEndpoint(transport: client);
 
-      final id = client.createStream();
-      String? status;
-      final sub = client.getMessagesForStream(id).listen((m) {
-        status ??= m.metadata?.getHeaderValue(RpcHeaders.grpcStatus);
-      }, onError: (Object _) {});
-      await client.sendMetadata(
-        id,
-        RpcMetadata.forClientRequest('Svc', 'held'),
-      );
-      final frame = RpcMessageFrame.encode(_codec.serialize(_chunk));
+    final id = client.createStream();
+    String? status;
+    final sub = client.getMessagesForStream(id).listen((m) {
+      status ??= m.metadata?.getHeaderValue(RpcHeaders.grpcStatus);
+    }, onError: (Object _) {});
+    await client.sendMetadata(id, RpcMetadata.forClientRequest('Svc', 'held'));
+    final frame = RpcMessageFrame.encode(_codec.serialize(_chunk));
+    await client.sendMessage(id, frame);
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    // Past the connection total, so the stream is refused and torn down while
+    // holding all of it.
+    for (var i = 0; i < ceiling + 16 && status == null; i++) {
       await client.sendMessage(id, frame);
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-      // Past the connection total, so the stream is refused and torn down while
-      // holding all of it.
-      for (var i = 0; i < ceiling + 16 && status == null; i++) {
-        await client.sendMessage(id, frame);
-      }
-      final deadline = DateTime.now().add(const Duration(seconds: 5));
-      while (status == null && DateTime.now().isBefore(deadline)) {
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-      }
-      // INTERNAL since round 637: the first frame after the request is a second
-      // request, refused at once, so the stream is torn down holding only the
-      // request -- which is still what must come back.
-      expect(status, '${RpcStatus.internal.code}');
-      s.hold.complete();
+    }
+    final deadline = DateTime.now().add(const Duration(seconds: 5));
+    while (status == null && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
+    // INTERNAL since round 637: the first frame after the request is a second
+    // request, refused at once, so the stream is torn down holding only the
+    // request -- which is still what must come back.
+    expect(status, '${RpcStatus.internal.code}');
+    s.hold.complete();
 
-      final fresh = StreamController<RpcString>();
-      final answer = caller.clientStream<RpcString, RpcString>(
-        serviceName: 'Svc',
-        methodName: 'counts',
-        requestCodec: _codec,
-        responseCodec: _codec,
-        requests: fresh.stream,
-      );
-      for (var i = 0; i < 64; i++) {
-        fresh.add(_chunk);
-      }
-      await fresh.close();
-      String after;
-      try {
-        after = (await answer.timeout(const Duration(seconds: 10))).value;
-      } catch (e) {
-        after = e.toString().split('\n').first;
-      }
-      expect(after, '64', reason: 'the finished unary kept its charge');
+    final fresh = StreamController<RpcString>();
+    final answer = caller.clientStream<RpcString, RpcString>(
+      serviceName: 'Svc',
+      methodName: 'counts',
+      requestCodec: _codec,
+      responseCodec: _codec,
+      requests: fresh.stream,
+    );
+    for (var i = 0; i < 64; i++) {
+      fresh.add(_chunk);
+    }
+    await fresh.close();
+    String after;
+    try {
+      after = (await answer.timeout(const Duration(seconds: 10))).value;
+    } catch (e) {
+      after = e.toString().split('\n').first;
+    }
+    expect(after, '64', reason: 'the finished unary kept its charge');
 
-      await sub.cancel();
-      await caller.close();
-      await responder.close();
-      await client.close();
-      await server.close();
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    await sub.cancel();
+    await caller.close();
+    await responder.close();
+    await client.close();
+    await server.close();
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'CONTROL: an honest peer is never refused',
-    () async {
-      final r = await _flood(
-        method: 'upload',
-        streams: 8,
-        peerHonoursWindow: true,
-      );
-      expect(r.errors, 0, reason: '$r');
-      expect(r.after, '200', reason: '$r');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('CONTROL: an honest peer is never refused', () async {
+    final r = await _flood(
+      method: 'upload',
+      streams: 8,
+      peerHonoursWindow: true,
+    );
+    expect(r.errors, 0, reason: '$r');
+    expect(r.after, '200', reason: '$r');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

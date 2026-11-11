@@ -55,55 +55,51 @@ String _stats(List<int> micros) {
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets(
-    'what a call over the wasm bridge costs',
-    (_) async {
-      final c = await _connect();
+  testWidgets('what a call over the wasm bridge costs', (_) async {
+    final c = await _connect();
 
-      Future<int> once(String method, String arg) async {
-        final clock = Stopwatch()..start();
-        await c.caller
-            .unary<RpcString, RpcString>(
-              serviceName: 'Echo',
-              methodName: method,
-              request: arg.rpc,
-              requestCodec: _codec,
-              responseCodec: _codec,
-            )
-            .timeout(const Duration(seconds: 60));
-        return clock.elapsedMicroseconds;
+    Future<int> once(String method, String arg) async {
+      final clock = Stopwatch()..start();
+      await c.caller
+          .unary<RpcString, RpcString>(
+            serviceName: 'Echo',
+            methodName: method,
+            request: arg.rpc,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .timeout(const Duration(seconds: 60));
+      return clock.elapsedMicroseconds;
+    }
+
+    // Discarded: sandbox and isolate setup that no later call pays.
+    await once('Say', 'warmup');
+
+    final rows = <String>[];
+    for (final (label, method, arg, n) in <(String, String, String, int)>[
+      ('empty unary', 'Say', 'x', 200),
+      ('1 KiB response', 'Big', '1024', 200),
+      ('64 KiB response', 'Big', '65536', 100),
+      ('1 MiB response', 'Big', '1048576', 20),
+    ]) {
+      final samples = <int>[];
+      for (var i = 0; i < n; i++) {
+        samples.add(await once(method, arg));
       }
-
-      // Discarded: sandbox and isolate setup that no later call pays.
-      await once('Say', 'warmup');
-
-      final rows = <String>[];
-      for (final (label, method, arg, n) in <(String, String, String, int)>[
-        ('empty unary', 'Say', 'x', 200),
-        ('1 KiB response', 'Big', '1024', 200),
-        ('64 KiB response', 'Big', '65536', 100),
-        ('1 MiB response', 'Big', '1048576', 20),
-      ]) {
-        final samples = <int>[];
-        for (var i = 0; i < n; i++) {
-          samples.add(await once(method, arg));
-        }
-        rows.add(
-          '   ${label.padRight(18)}${'n=$n'.padRight(8)}'
-          '${_stats(samples)}',
-        );
-      }
-
-      // ignore: avoid_print
-      print(
-        'platform: ${Platform.operatingSystem}\n'
-        '   shape             n       p50      p95      p99\n'
-        '${rows.join("\n")}',
+      rows.add(
+        '   ${label.padRight(18)}${'n=$n'.padRight(8)}'
+        '${_stats(samples)}',
       );
+    }
 
-      await c.caller.close();
-      await c.bridge.close();
-    },
-    timeout: const Timeout(Duration(minutes: 15)),
-  );
+    // ignore: avoid_print
+    print(
+      'platform: ${Platform.operatingSystem}\n'
+      '   shape             n       p50      p95      p99\n'
+      '${rows.join("\n")}',
+    );
+
+    await c.caller.close();
+    await c.bridge.close();
+  }, timeout: const Timeout(Duration(minutes: 15)));
 }

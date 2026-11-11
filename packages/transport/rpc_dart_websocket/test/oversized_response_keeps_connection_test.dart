@@ -160,76 +160,68 @@ void main() {
     expect(after.value, 'ok');
   }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'a stream keeps the items it already delivered',
-    () async {
-      // Pre-fix the connection died before even the first item arrived.
-      final rig = await _connect();
+  test('a stream keeps the items it already delivered', () async {
+    // Pre-fix the connection died before even the first item arrived.
+    final rig = await _connect();
 
-      final items = <String>[];
-      Object? error;
-      final settled = Completer<void>();
-      final sub = rig.caller
-          .serverStream<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'bigStream',
-            request: 'go'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          )
-          .listen(
-            (r) => items.add(r.value.length > 32 ? '<big>' : r.value),
-            onError: (Object e) {
-              error ??= e;
-              if (!settled.isCompleted) settled.complete();
-            },
-            onDone: () {
-              if (!settled.isCompleted) settled.complete();
-            },
-          );
-      addTearDown(sub.cancel);
-      await settled.future.timeout(const Duration(seconds: 20));
-
-      expect(items, ['first']);
-      expect(
-        error,
-        isA<RpcStatusException>().having(
-          (e) => e.statusCode,
-          'statusCode',
-          RpcStatus.resourceExhausted,
-        ),
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
-
-  test(
-    'repeated refusals do not wedge the connection',
-    () async {
-      // The regression round 161 created by keeping the connection alive: a
-      // skipped frame never becomes a message, so the credit-on-consume path
-      // never runs for it and the peer's window shrinks by the size of every
-      // refusal. With an 8 MiB window and 2 MiB per refusal it wedged on the
-      // FOURTH -- `small` went from 2 ms to a 6 s timeout and stayed there.
-      //
-      // Eight rounds, i.e. twice the window, so a leak of any size shows.
-      final rig = await _connect(policy: _tightWindowPolicy);
-
-      for (var i = 1; i <= 8; i++) {
-        await expectLater(
-          _unary(rig.caller, 'big').timeout(const Duration(seconds: 20)),
-          throwsA(isA<RpcStatusException>()),
-          reason: 'refusal $i',
+    final items = <String>[];
+    Object? error;
+    final settled = Completer<void>();
+    final sub = rig.caller
+        .serverStream<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'bigStream',
+          request: 'go'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .listen(
+          (r) => items.add(r.value.length > 32 ? '<big>' : r.value),
+          onError: (Object e) {
+            error ??= e;
+            if (!settled.isCompleted) settled.complete();
+          },
+          onDone: () {
+            if (!settled.isCompleted) settled.complete();
+          },
         );
-        final small = await _unary(
-          rig.caller,
-          'small',
-        ).timeout(const Duration(seconds: 10));
-        expect(small.value, 'ok', reason: 'after refusal $i');
-      }
-    },
-    timeout: const Timeout(Duration(seconds: 120)),
-  );
+    addTearDown(sub.cancel);
+    await settled.future.timeout(const Duration(seconds: 20));
+
+    expect(items, ['first']);
+    expect(
+      error,
+      isA<RpcStatusException>().having(
+        (e) => e.statusCode,
+        'statusCode',
+        RpcStatus.resourceExhausted,
+      ),
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
+
+  test('repeated refusals do not wedge the connection', () async {
+    // The regression round 161 created by keeping the connection alive: a
+    // skipped frame never becomes a message, so the credit-on-consume path
+    // never runs for it and the peer's window shrinks by the size of every
+    // refusal. With an 8 MiB window and 2 MiB per refusal it wedged on the
+    // FOURTH -- `small` went from 2 ms to a 6 s timeout and stayed there.
+    //
+    // Eight rounds, i.e. twice the window, so a leak of any size shows.
+    final rig = await _connect(policy: _tightWindowPolicy);
+
+    for (var i = 1; i <= 8; i++) {
+      await expectLater(
+        _unary(rig.caller, 'big').timeout(const Duration(seconds: 20)),
+        throwsA(isA<RpcStatusException>()),
+        reason: 'refusal $i',
+      );
+      final small = await _unary(
+        rig.caller,
+        'small',
+      ).timeout(const Duration(seconds: 10));
+      expect(small.value, 'ok', reason: 'after refusal $i');
+    }
+  }, timeout: const Timeout(Duration(seconds: 120)));
 
   test(
     'the refusal survives a header cap smaller than its own message',
@@ -279,18 +271,14 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
-  test(
-    'GUARD: a response inside the limit is unaffected',
-    () async {
-      // Without this the witnesses would pass on a channel that refused
-      // everything.
-      final rig = await _connect();
-      final r = await _unary(
-        rig.caller,
-        'small',
-      ).timeout(const Duration(seconds: 20));
-      expect(r.value, 'ok');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('GUARD: a response inside the limit is unaffected', () async {
+    // Without this the witnesses would pass on a channel that refused
+    // everything.
+    final rig = await _connect();
+    final r = await _unary(
+      rig.caller,
+      'small',
+    ).timeout(const Duration(seconds: 20));
+    expect(r.value, 'ok');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

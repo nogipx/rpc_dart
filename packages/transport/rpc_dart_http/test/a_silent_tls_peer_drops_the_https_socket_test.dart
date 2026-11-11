@@ -141,34 +141,26 @@ void main() {
   // before the fix — the abort reaches a request `openUrl` has returned. If
   // this arm fails, the bench cannot see a close and the witness proves
   // nothing.
-  test(
-    'CONTROL: releasing an http call closes its socket',
-    () async {
-      final silent = await _run(tls: false, httpClient: null);
-      await silent.closes.single.future.timeout(
-        const Duration(seconds: 8),
-        onTimeout: () => fail('the released http call kept its socket'),
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+  test('CONTROL: releasing an http call closes its socket', () async {
+    final silent = await _run(tls: false, httpClient: null);
+    await silent.closes.single.future.timeout(
+      const Duration(seconds: 8),
+      onTimeout: () => fail('the released http call kept its socket'),
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
   // CANARY: the connect timeout alone is not the fix. A caller-supplied client
   // WITH the same connectTimeout but WITHOUT the connection factory — dart:io's
   // own secure connect — cancels only the TCP stage when the timeout fires,
   // and the socket the dead handshake owns stays open.
-  test(
-    'CANARY: a timeout without the factory keeps the socket',
-    () async {
-      final own = HttpClient()..connectionTimeout = _connectTimeout;
-      final silent = await _run(tls: true, httpClient: IOClient(own));
-      await expectLater(
-        silent.closes.single.future.timeout(
-          _connectTimeout + const Duration(seconds: 4),
-        ),
-        throwsA(isA<TimeoutException>()),
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+  test('CANARY: a timeout without the factory keeps the socket', () async {
+    final own = HttpClient()..connectionTimeout = _connectTimeout;
+    final silent = await _run(tls: true, httpClient: IOClient(own));
+    await expectLater(
+      silent.closes.single.future.timeout(
+        _connectTimeout + const Duration(seconds: 4),
+      ),
+      throwsA(isA<TimeoutException>()),
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
 }

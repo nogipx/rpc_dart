@@ -87,37 +87,33 @@ void main() {
     await Future<void>.delayed(const Duration(seconds: 1));
   }
 
-  test(
-    'a throwing responder register callback releases the endpoint',
-    () async {
-      http = await HttpServer.bind('127.0.0.1', 0);
-      server = RpcWebSocketServer(
-        connections: rpcWebSocketConnections(http),
-        mode: RpcResponderMode((e) {
-          e.registerServiceContract(_Contract());
-          throw StateError('DI failed while registering contracts');
-        }),
-      );
-      await server.start();
-      uri = Uri.parse('ws://127.0.0.1:${http.port}');
+  test('a throwing responder register callback releases the endpoint', () async {
+    http = await HttpServer.bind('127.0.0.1', 0);
+    server = RpcWebSocketServer(
+      connections: rpcWebSocketConnections(http),
+      mode: RpcResponderMode((e) {
+        e.registerServiceContract(_Contract());
+        throw StateError('DI failed while registering contracts');
+      }),
+    );
+    await server.start();
+    uri = Uri.parse('ws://127.0.0.1:${http.port}');
 
-      await connectAndDrop(3);
+    await connectAndDrop(3);
 
-      expect(
-        server.endpoints,
-        isEmpty,
-        reason: 'the endpoint was registered before the callback that threw',
-      );
-      expect(
-        _disposed,
-        3,
-        reason:
-            'closing the endpoint is what disposes the contracts; without it the '
-            'application keeps whatever they hold for the life of the process',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    expect(
+      server.endpoints,
+      isEmpty,
+      reason: 'the endpoint was registered before the callback that threw',
+    );
+    expect(
+      _disposed,
+      3,
+      reason:
+          'closing the endpoint is what disposes the contracts; without it the '
+          'application keeps whatever they hold for the life of the process',
+    );
+  }, timeout: const Timeout(Duration(seconds: 90)));
 
   test('the PEER branch releases too', () async {
     http = await HttpServer.bind('127.0.0.1', 0);

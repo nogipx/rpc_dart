@@ -86,38 +86,30 @@ Future<String> _call(int port) async {
 }
 
 void main() {
-  test(
-    'a unary response ended on DATA without trailers is an error',
-    () async {
-      final listener = await _rawServer(withTrailers: false);
-      addTearDown(() => listener.close());
+  test('a unary response ended on DATA without trailers is an error', () async {
+    final listener = await _rawServer(withTrailers: false);
+    addTearDown(() => listener.close());
 
-      expect(
-        await _call(listener.port),
-        // INTERNAL since round 571, and the value carries a requirement: this peer
-        // is alive and forgot its trailers, so the work may have run. With
-        // UNAVAILABLE and `maxAttempts: 3` the server executed one call THREE
-        // times. A connection that DIED still reads UNAVAILABLE.
-        'status ${RpcStatus.internal.code}',
-        reason:
-            'a response with no grpc-status is malformed; returning its value '
-            'hands the caller possibly-truncated data as if it were complete',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      await _call(listener.port),
+      // INTERNAL since round 571, and the value carries a requirement: this peer
+      // is alive and forgot its trailers, so the work may have run. With
+      // UNAVAILABLE and `maxAttempts: 3` the server executed one call THREE
+      // times. A connection that DIED still reads UNAVAILABLE.
+      'status ${RpcStatus.internal.code}',
+      reason:
+          'a response with no grpc-status is malformed; returning its value '
+          'hands the caller possibly-truncated data as if it were complete',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD: a conforming unary response still returns its value',
-    () async {
-      // The load-bearing guard: the value is now held until a status arrives,
-      // so a well-formed response must still complete -- otherwise every unary
-      // call would fail.
-      final listener = await _rawServer(withTrailers: true);
-      addTearDown(() => listener.close());
+  test('GUARD: a conforming unary response still returns its value', () async {
+    // The load-bearing guard: the value is now held until a status arrives,
+    // so a well-formed response must still complete -- otherwise every unary
+    // call would fail.
+    final listener = await _rawServer(withTrailers: true);
+    addTearDown(() => listener.close());
 
-      expect(await _call(listener.port), 'returned answer');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(await _call(listener.port), 'returned answer');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

@@ -63,76 +63,68 @@ const _perStream = [
 ];
 
 void main() {
-  test(
-    'every per-stream map returns to zero after completed calls',
-    () async {
-      final server = RpcHttp2Server(
-        host: '127.0.0.1',
-        port: 0,
-        mode: RpcResponderMode((e) => e.registerServiceContract(_Echo())),
+  test('every per-stream map returns to zero after completed calls', () async {
+    final server = RpcHttp2Server(
+      host: '127.0.0.1',
+      port: 0,
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Echo())),
+    );
+    await server.start();
+    addTearDown(() => server.stop().catchError((Object _) {}));
+
+    final transport = await RpcHttp2CallerTransport.connect(
+      host: '127.0.0.1',
+      port: server.port,
+    );
+    final caller = RpcCallerEndpoint(transport: transport);
+    addTearDown(() async {
+      await caller.close().catchError((Object _) {});
+      await transport.close().catchError((Object _) {});
+    });
+
+    // Both shapes, several times: one unary call leaves little behind by
+    // accident, and a repeat is what turns a leak into a trend.
+    for (var i = 0; i < 5; i++) {
+      final reply = await caller
+          .unary<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: 'Echo',
+            request: 'x$i'.rpc,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .timeout(const Duration(seconds: 10));
+      expect(reply.value, 'x$i');
+
+      final ticks = await caller
+          .serverStream<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: 'Tick',
+            request: 'y$i'.rpc,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .toList()
+          .timeout(const Duration(seconds: 10));
+      expect(ticks, hasLength(2));
+    }
+
+    // Let any detached teardown settle; a leak does not go away with time and a
+    // late removal is not one.
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+
+    final details = (await transport.health()).details;
+    for (final key in _perStream) {
+      expect(
+        details[key],
+        0,
+        reason:
+            '$key holds an entry after every call completed — a per-stream map '
+            'that grows is how a connection leaks over its lifetime',
       );
-      await server.start();
-      addTearDown(() => server.stop().catchError((Object _) {}));
-
-      final transport = await RpcHttp2CallerTransport.connect(
-        host: '127.0.0.1',
-        port: server.port,
-      );
-      final caller = RpcCallerEndpoint(transport: transport);
-      addTearDown(() async {
-        await caller.close().catchError((Object _) {});
-        await transport.close().catchError((Object _) {});
-      });
-
-      // Both shapes, several times: one unary call leaves little behind by
-      // accident, and a repeat is what turns a leak into a trend.
-      for (var i = 0; i < 5; i++) {
-        final reply = await caller
-            .unary<RpcString, RpcString>(
-              serviceName: 'Svc',
-              methodName: 'Echo',
-              request: 'x$i'.rpc,
-              requestCodec: _codec,
-              responseCodec: _codec,
-            )
-            .timeout(const Duration(seconds: 10));
-        expect(reply.value, 'x$i');
-
-        final ticks = await caller
-            .serverStream<RpcString, RpcString>(
-              serviceName: 'Svc',
-              methodName: 'Tick',
-              request: 'y$i'.rpc,
-              requestCodec: _codec,
-              responseCodec: _codec,
-            )
-            .toList()
-            .timeout(const Duration(seconds: 10));
-        expect(ticks, hasLength(2));
-      }
-
-      // Let any detached teardown settle; a leak does not go away with time and a
-      // late removal is not one.
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-
-      final details = (await transport.health()).details;
-      for (final key in _perStream) {
-        expect(
-          details[key],
-          0,
-          reason:
-              '$key holds an entry after every call completed — a per-stream map '
-              'that grows is how a connection leaks over its lifetime',
-        );
-        // And the key must EXIST: a map nobody reports is a leak nobody can see,
-        // which is how halfClosedLocal came to be the unreported one.
-        expect(
-          details.containsKey(key),
-          isTrue,
-          reason: '$key is not reported',
-        );
-      }
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+      // And the key must EXIST: a map nobody reports is a leak nobody can see,
+      // which is how halfClosedLocal came to be the unreported one.
+      expect(details.containsKey(key), isTrue, reason: '$key is not reported');
+    }
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

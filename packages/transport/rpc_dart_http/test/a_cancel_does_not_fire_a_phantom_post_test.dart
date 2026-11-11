@@ -87,77 +87,67 @@ Future<void> _waitForArrival(List<String> paths) async {
 }
 
 void main() {
-  test(
-    'WITNESS: cancelling costs no second request',
-    () async {
-      final rig = await _serve();
-      final caller = RpcCallerEndpoint(
-        transport: RpcHttpCallerTransport(
-          baseUrl: 'http://127.0.0.1:${rig.port}',
-        ),
-      );
-      addTearDown(caller.close);
+  test('WITNESS: cancelling costs no second request', () async {
+    final rig = await _serve();
+    final caller = RpcCallerEndpoint(
+      transport: RpcHttpCallerTransport(
+        baseUrl: 'http://127.0.0.1:${rig.port}',
+      ),
+    );
+    addTearDown(caller.close);
 
-      final token = RpcCancellationToken();
-      final call = caller.unary<RpcString, RpcString>(
-        serviceName: 'Svc',
-        methodName: 'slow',
-        request: 'x'.rpc,
-        requestCodec: _codec,
-        responseCodec: _codec,
-        context: RpcContext.empty().withCancellation(token),
-      );
+    final token = RpcCancellationToken();
+    final call = caller.unary<RpcString, RpcString>(
+      serviceName: 'Svc',
+      methodName: 'slow',
+      request: 'x'.rpc,
+      requestCodec: _codec,
+      responseCodec: _codec,
+      context: RpcContext.empty().withCancellation(token),
+    );
 
-      // Cancel once the request has ARRIVED, not after a fixed delay.
-      //
-      // `releaseStreamId` completes an abort trigger, so a cancel that lands
-      // before the POST is accepted aborts it and the server records nothing at
-      // all — which is the abort working, and is not what this test is about. A
-      // 100 ms sleep was enough on an idle machine and not under load: measured
-      // over five runs each, `[]` every time at 0 and 1 ms, once in five at 5 ms,
-      // never at 20 ms and above. Waiting for arrival makes the premise a fact
-      // instead of a bet, and keeps the cancel inside the window the phantom
-      // request used to fire in (the handler sleeps 2 s).
-      await _waitForArrival(rig.paths);
-      token.cancel('user asked');
-      await expectLater(call, throwsA(isA<RpcCancelledException>()));
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+    // Cancel once the request has ARRIVED, not after a fixed delay.
+    //
+    // `releaseStreamId` completes an abort trigger, so a cancel that lands
+    // before the POST is accepted aborts it and the server records nothing at
+    // all — which is the abort working, and is not what this test is about. A
+    // 100 ms sleep was enough on an idle machine and not under load: measured
+    // over five runs each, `[]` every time at 0 and 1 ms, once in five at 5 ms,
+    // never at 20 ms and above. Waiting for arrival makes the premise a fact
+    // instead of a bet, and keeps the cancel inside the window the phantom
+    // request used to fire in (the handler sleeps 2 s).
+    await _waitForArrival(rig.paths);
+    token.cancel('user asked');
+    await expectLater(call, throwsA(isA<RpcCancelledException>()));
+    await Future<void>.delayed(const Duration(milliseconds: 600));
 
-      expect(
-        rig.paths,
-        ['/Svc/slow'],
-        reason: 'the cancellation notice was fired as a call of its own',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(rig.paths, [
+      '/Svc/slow',
+    ], reason: 'the cancellation notice was fired as a call of its own');
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
-  test(
-    'CONTROL: an uncancelled call is also one request',
-    () async {
-      final rig = await _serve();
-      final caller = RpcCallerEndpoint(
-        transport: RpcHttpCallerTransport(
-          baseUrl: 'http://127.0.0.1:${rig.port}',
-        ),
-      );
-      addTearDown(caller.close);
+  test('CONTROL: an uncancelled call is also one request', () async {
+    final rig = await _serve();
+    final caller = RpcCallerEndpoint(
+      transport: RpcHttpCallerTransport(
+        baseUrl: 'http://127.0.0.1:${rig.port}',
+      ),
+    );
+    addTearDown(caller.close);
 
-      final reply = await caller
-          .unary<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'slow',
-            request: 'x'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          )
-          .timeout(const Duration(seconds: 10));
+    final reply = await caller
+        .unary<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'slow',
+          request: 'x'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .timeout(const Duration(seconds: 10));
 
-      expect(reply.value, 'slow:x');
-      expect(rig.paths, ['/Svc/slow']);
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(reply.value, 'slow:x');
+    expect(rig.paths, ['/Svc/slow']);
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
   // The window before the request fires. Driven on the transport, because core
   // releases the stream too quickly for an endpoint-level test to reach it --
@@ -205,11 +195,9 @@ void main() {
       await transport.finishSending(id);
       await Future<void>.delayed(const Duration(milliseconds: 400));
 
-      expect(
-        paths,
-        ['/Svc/slow'],
-        reason: 'the notice replaced the pending call and fired in its place',
-      );
+      expect(paths, [
+        '/Svc/slow',
+      ], reason: 'the notice replaced the pending call and fired in its place');
       expect(bodies, [
         16,
       ], reason: 'and took the buffered request body with it');
@@ -219,35 +207,31 @@ void main() {
 
   // GUARD: a metadata frame that DOES name a method still opens a call. The
   // witness would also pass on a transport that had stopped sending anything.
-  test(
-    'GUARD: an opening frame still fires its request',
-    () async {
-      final paths = <String>[];
-      final server = await shelf_io.serve(
-        (shelf.Request req) {
-          paths.add('/${req.url.path}');
-          return shelf.Response.ok(null);
-        },
-        '127.0.0.1',
-        0,
-      );
-      addTearDown(() => server.close(force: true));
+  test('GUARD: an opening frame still fires its request', () async {
+    final paths = <String>[];
+    final server = await shelf_io.serve(
+      (shelf.Request req) {
+        paths.add('/${req.url.path}');
+        return shelf.Response.ok(null);
+      },
+      '127.0.0.1',
+      0,
+    );
+    addTearDown(() => server.close(force: true));
 
-      final transport = RpcHttpCallerTransport(
-        baseUrl: 'http://127.0.0.1:${server.port}',
-      );
-      addTearDown(transport.close);
+    final transport = RpcHttpCallerTransport(
+      baseUrl: 'http://127.0.0.1:${server.port}',
+    );
+    addTearDown(transport.close);
 
-      final id = transport.createStream();
-      await transport.sendMetadata(
-        id,
-        RpcMetadata.forClientRequest('Svc', 'slow'),
-        endStream: true,
-      );
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+    final id = transport.createStream();
+    await transport.sendMetadata(
+      id,
+      RpcMetadata.forClientRequest('Svc', 'slow'),
+      endStream: true,
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 300));
 
-      expect(paths, ['/Svc/slow']);
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(paths, ['/Svc/slow']);
+  }, timeout: const Timeout(Duration(seconds: 30)));
 }

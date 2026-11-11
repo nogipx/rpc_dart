@@ -137,14 +137,10 @@ void main() {
     expect(warnings, isEmpty);
   });
 
-  test(
-    'CONTROL: a call left alone is not cancelled',
-    () async {
-      final s = await _serve();
-      unawaited(_call(s.caller, RpcContext.empty()));
-      await Future<void>.delayed(_bound);
-      expect(s.cancelled.isCompleted, isFalse);
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+  test('CONTROL: a call left alone is not cancelled', () async {
+    final s = await _serve();
+    unawaited(_call(s.caller, RpcContext.empty()));
+    await Future<void>.delayed(_bound);
+    expect(s.cancelled.isCompleted, isFalse);
+  }, timeout: const Timeout(Duration(seconds: 30)));
 }

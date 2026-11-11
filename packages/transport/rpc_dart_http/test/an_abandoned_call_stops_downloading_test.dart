@@ -111,52 +111,40 @@ Future<_Run> _run({required bool abandon}) async {
 }
 
 void main() {
-  test(
-    'WITNESS: abandoning a call stops the download at the server',
-    () async {
-      final run = await _run(abandon: true);
+  test('WITNESS: abandoning a call stops the download at the server', () async {
+    final run = await _run(abandon: true);
 
-      expect(
-        run.finished,
-        isFalse,
-        reason:
-            'the server wrote its whole response to a client that had already '
-            'given up: the socket and the bandwidth are held until the server '
-            'stops, and the concurrency slot is already back',
-      );
-      expect(run.written, lessThan(_chunks));
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      run.finished,
+      isFalse,
+      reason:
+          'the server wrote its whole response to a client that had already '
+          'given up: the socket and the bandwidth are held until the server '
+          'stops, and the concurrency slot is already back',
+    );
+    expect(run.written, lessThan(_chunks));
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   // CONTROL: a call nobody abandons must still complete. Without this, "the
   // server did not finish" is equally consistent with a transport that broke the
   // request outright.
-  test(
-    'CONTROL: a call left alone runs to completion',
-    () async {
-      final run = await _run(abandon: false);
+  test('CONTROL: a call left alone runs to completion', () async {
+    final run = await _run(abandon: false);
 
-      expect(run.finished, isTrue);
-      expect(run.written, _chunks);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(run.finished, isTrue);
+    expect(run.written, _chunks);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   // GUARD: an abort is this side's own doing, so nothing may be reported for it.
   // A cancellation that surfaced as a transport error would answer a stream the
   // endpoint has stopped listening to.
-  test(
-    'GUARD: an abandoned call reports no error',
-    () async {
-      final run = await _run(abandon: true);
+  test('GUARD: an abandoned call reports no error', () async {
+    final run = await _run(abandon: true);
 
-      expect(
-        run.errors,
-        0,
-        reason: 'ordinary teardown now looks like a transport failure',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      run.errors,
+      0,
+      reason: 'ordinary teardown now looks like a transport failure',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

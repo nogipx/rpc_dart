@@ -135,22 +135,18 @@ void main() {
   // dropped as a broken connection. The server says so once, at start, with
   // what to do instead.
   group('a wrapped connections stream', () {
-    test(
-      'WITNESS: the larger message is still dropped',
-      () async {
-        await expectLater(
-          _send(wrapped: true),
-          throwsA(
-            isA<RpcStatusException>().having(
-              (e) => e.statusCode,
-              'status',
-              RpcStatus.unavailable,
-            ),
+    test('WITNESS: the larger message is still dropped', () async {
+      await expectLater(
+        _send(wrapped: true),
+        throwsA(
+          isA<RpcStatusException>().having(
+            (e) => e.statusCode,
+            'status',
+            RpcStatus.unavailable,
           ),
-        );
-      },
-      timeout: const Timeout(Duration(minutes: 1)),
-    );
+        ),
+      );
+    }, timeout: const Timeout(Duration(minutes: 1)));
 
     // Once over two starts: a restart reuses the kept subscription.
     test('WITNESS: a raised limit is warned about once', () async {
@@ -172,11 +168,7 @@ void main() {
     });
   });
 
-  test(
-    'CONTROL the same policy passed to the connections too',
-    () async {
-      expect(await _send(connectionsPolicy: _raised), '$_size');
-    },
-    timeout: const Timeout(Duration(minutes: 1)),
-  );
+  test('CONTROL the same policy passed to the connections too', () async {
+    expect(await _send(connectionsPolicy: _raised), '$_size');
+  }, timeout: const Timeout(Duration(minutes: 1)));
 }

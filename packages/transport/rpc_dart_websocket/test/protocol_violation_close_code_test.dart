@@ -109,97 +109,85 @@ void main() {
     return (code: ws.closeCode, reason: ws.closeReason);
   }
 
-  test(
-    'a framing violation closes with a non-retryable code',
-    () async {
-      // A frame budget small enough that the declared payload below breaches it.
-      await boot(policy: const RpcSecurityPolicy(maxMessageLengthBytes: 1024));
+  test('a framing violation closes with a non-retryable code', () async {
+    // A frame budget small enough that the declared payload below breaches it.
+    await boot(policy: const RpcSecurityPolicy(maxMessageLengthBytes: 1024));
 
-      final closed = await observeClose((ws) async {
-        // Real header layout: 4 bytes streamId, 1 byte flags, 4 bytes length.
-        final header = Uint8List(RpcChannelFrame.headerSize);
-        header.buffer.asByteData()
-          ..setUint32(0, 1)
-          ..setUint8(4, 0)
-          ..setUint32(5, 64 * 1024 * 1024);
-        ws.sink.add(RpcChannelFrame.preface);
-        ws.sink.add(header);
-        await Future<void>.delayed(const Duration(seconds: 2));
-      });
+    final closed = await observeClose((ws) async {
+      // Real header layout: 4 bytes streamId, 1 byte flags, 4 bytes length.
+      final header = Uint8List(RpcChannelFrame.headerSize);
+      header.buffer.asByteData()
+        ..setUint32(0, 1)
+        ..setUint8(4, 0)
+        ..setUint32(5, 64 * 1024 * 1024);
+      ws.sink.add(RpcChannelFrame.preface);
+      ws.sink.add(header);
+      await Future<void>.delayed(const Duration(seconds: 2));
+    });
 
-      expect(
-        closed.code,
-        isNotNull,
-        reason: 'the server must say why it hung up',
-      );
-      expect(
-        closed.code,
-        isNot(1005),
-        reason:
-            '1005 "no status received" maps to UNAVAILABLE, which is retryable, '
-            'so the peer resends the frame that just got it disconnected',
-      );
-      expect(
-        grpcStatusFromWebSocketCloseCode(closed.code),
-        isNot(RpcStatus.unavailable),
-        reason: 'a deterministic rejection must not be reported as transient',
-      );
-      expect(
-        closed.reason,
-        contains('too large'),
-        reason: 'the reason carries the diagnostic a human needs',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      closed.code,
+      isNotNull,
+      reason: 'the server must say why it hung up',
+    );
+    expect(
+      closed.code,
+      isNot(1005),
+      reason:
+          '1005 "no status received" maps to UNAVAILABLE, which is retryable, '
+          'so the peer resends the frame that just got it disconnected',
+    );
+    expect(
+      grpcStatusFromWebSocketCloseCode(closed.code),
+      isNot(RpcStatus.unavailable),
+      reason: 'a deterministic rejection must not be reported as transient',
+    );
+    expect(
+      closed.reason,
+      contains('too large'),
+      reason: 'the reason carries the diagnostic a human needs',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD: an ordinary shutdown stays retryable',
-    () async {
-      // The whole point of distinguishing them. A client SHOULD reconnect past a
-      // restart, so this path must keep producing a retryable status.
-      await boot();
+  test('GUARD: an ordinary shutdown stays retryable', () async {
+    // The whole point of distinguishing them. A client SHOULD reconnect past a
+    // restart, so this path must keep producing a retryable status.
+    await boot();
 
-      final closed = await observeClose((ws) async {
-        await Future<void>.delayed(const Duration(milliseconds: 300));
-        for (final e in endpoints) {
-          await e.close().catchError((Object _) {});
-        }
-      });
+    final closed = await observeClose((ws) async {
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      for (final e in endpoints) {
+        await e.close().catchError((Object _) {});
+      }
+    });
 
-      expect(
-        grpcStatusFromWebSocketCloseCode(closed.code),
-        RpcStatus.unavailable,
-        reason: 'a shutdown is transient and must remain retryable',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      grpcStatusFromWebSocketCloseCode(closed.code),
+      RpcStatus.unavailable,
+      reason: 'a shutdown is transient and must remain retryable',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD: a healthy connection is unaffected',
-    () async {
-      await boot();
-      final transport = await RpcWebSocketCallerTransport.connect(
-        Uri.parse('ws://127.0.0.1:${http.port}'),
-      );
-      final caller = RpcCallerEndpoint(transport: transport);
-      addTearDown(() async {
-        await caller.close().catchError((Object _) {});
-        await transport.close().catchError((Object _) {});
-      });
+  test('GUARD: a healthy connection is unaffected', () async {
+    await boot();
+    final transport = await RpcWebSocketCallerTransport.connect(
+      Uri.parse('ws://127.0.0.1:${http.port}'),
+    );
+    final caller = RpcCallerEndpoint(transport: transport);
+    addTearDown(() async {
+      await caller.close().catchError((Object _) {});
+      await transport.close().catchError((Object _) {});
+    });
 
-      final r = await caller
-          .unary<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'Echo',
-            request: 'x'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          )
-          .timeout(const Duration(seconds: 8));
-      expect(r.value, 'echo-ok');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    final r = await caller
+        .unary<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'Echo',
+          request: 'x'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .timeout(const Duration(seconds: 8));
+    expect(r.value, 'echo-ok');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

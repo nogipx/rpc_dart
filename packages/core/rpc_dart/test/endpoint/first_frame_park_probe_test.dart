@@ -110,35 +110,31 @@ Future<void> _probe({
 }
 
 void main() {
-  test(
-    'what the opening frame does on the shipped policy',
-    () async {
-      // Shipped defaults: 64 KiB initial window, 4 MiB stream window, 5s grace.
-      await _probe(
-        label: '6.0.0 defaults, handler reads at once',
-        startupDelay: Duration.zero,
-        policy: const RpcSecurityPolicy(),
-      );
-      await _probe(
-        label: '6.0.0 defaults, handler sleeps 2s',
-        startupDelay: const Duration(seconds: 2),
-        policy: const RpcSecurityPolicy(),
-      );
-      await _probe(
-        label: '6.0.0 defaults, handler sleeps 8s (past the grace)',
-        startupDelay: const Duration(seconds: 8),
-        policy: const RpcSecurityPolicy(),
-      );
-      // 5.0.1 had no initial send window. This is that shape.
-      await _probe(
-        label: '5.0.1 shape, no initial window, handler sleeps 8s',
-        startupDelay: const Duration(seconds: 8),
-        policy: const RpcSecurityPolicy(
-          initialSendWindowBytes: null,
-          initialSendWindowGrace: null,
-        ),
-      );
-    },
-    timeout: const Timeout(Duration(minutes: 3)),
-  );
+  test('what the opening frame does on the shipped policy', () async {
+    // Shipped defaults: 64 KiB initial window, 4 MiB stream window, 5s grace.
+    await _probe(
+      label: '6.0.0 defaults, handler reads at once',
+      startupDelay: Duration.zero,
+      policy: const RpcSecurityPolicy(),
+    );
+    await _probe(
+      label: '6.0.0 defaults, handler sleeps 2s',
+      startupDelay: const Duration(seconds: 2),
+      policy: const RpcSecurityPolicy(),
+    );
+    await _probe(
+      label: '6.0.0 defaults, handler sleeps 8s (past the grace)',
+      startupDelay: const Duration(seconds: 8),
+      policy: const RpcSecurityPolicy(),
+    );
+    // 5.0.1 had no initial send window. This is that shape.
+    await _probe(
+      label: '5.0.1 shape, no initial window, handler sleeps 8s',
+      startupDelay: const Duration(seconds: 8),
+      policy: const RpcSecurityPolicy(
+        initialSendWindowBytes: null,
+        initialSendWindowGrace: null,
+      ),
+    );
+  }, timeout: const Timeout(Duration(minutes: 3)));
 }

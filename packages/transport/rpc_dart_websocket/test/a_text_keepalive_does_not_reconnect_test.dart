@@ -126,41 +126,33 @@ Future<_Call> _startCall(RpcCallerEndpoint caller) async {
 }
 
 void main() {
-  test(
-    'WITNESS: one text frame does not cost a reconnect',
-    () async {
-      final rig = await _rig();
-      final a = await _startCall(rig.caller);
-      final before = a.got.length;
+  test('WITNESS: one text frame does not cost a reconnect', () async {
+    final rig = await _rig();
+    final a = await _startCall(rig.caller);
+    final before = a.got.length;
 
-      rig.sayText('keepalive');
-      await Future<void>.delayed(const Duration(seconds: 2));
+    rig.sayText('keepalive');
+    await Future<void>.delayed(const Duration(seconds: 2));
 
-      expect(
-        rig.built(),
-        1,
-        reason: 'a peer saying one non-binary thing replaced the connection',
-      );
-      expect(a.err(), isNull, reason: 'and failed every call riding on it');
-      expect(a.done(), isFalse);
-      expect(a.got.length, greaterThan(before));
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      rig.built(),
+      1,
+      reason: 'a peer saying one non-binary thing replaced the connection',
+    );
+    expect(a.err(), isNull, reason: 'and failed every call riding on it');
+    expect(a.done(), isFalse);
+    expect(a.got.length, greaterThan(before));
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'CONTROL: with no text frame the rig reads the same',
-    () async {
-      final rig = await _rig();
-      final a = await _startCall(rig.caller);
-      final before = a.got.length;
+  test('CONTROL: with no text frame the rig reads the same', () async {
+    final rig = await _rig();
+    final a = await _startCall(rig.caller);
+    final before = a.got.length;
 
-      await Future<void>.delayed(const Duration(seconds: 2));
+    await Future<void>.delayed(const Duration(seconds: 2));
 
-      expect(rig.built(), 1);
-      expect(a.err(), isNull);
-      expect(a.got.length, greaterThan(before));
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(rig.built(), 1);
+    expect(a.err(), isNull);
+    expect(a.got.length, greaterThan(before));
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

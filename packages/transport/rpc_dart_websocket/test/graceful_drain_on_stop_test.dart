@@ -89,45 +89,37 @@ void main() {
     return call;
   }
 
-  test(
-    'a drained stop lets an in-flight call finish',
-    () async {
-      final call = await startSlowCall();
+  test('a drained stop lets an in-flight call finish', () async {
+    final call = await startSlowCall();
 
-      await server.stop(drainTimeout: const Duration(seconds: 10));
+    await server.stop(drainTimeout: const Duration(seconds: 10));
 
-      expect(
-        await call.timeout(const Duration(seconds: 20)),
-        'returned finished',
-        reason:
-            'the whole point of a drain is that the call completes instead of '
-            'being cut off',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    expect(
+      await call.timeout(const Duration(seconds: 20)),
+      'returned finished',
+      reason:
+          'the whole point of a drain is that the call completes instead of '
+          'being cut off',
+    );
+  }, timeout: const Timeout(Duration(seconds: 90)));
 
-  test(
-    'a second stop during a drain waits for it',
-    () async {
-      final call = await startSlowCall();
+  test('a second stop during a drain waits for it', () async {
+    final call = await startSlowCall();
 
-      var first = false;
-      final draining = server
-          .stop(drainTimeout: const Duration(seconds: 10))
-          .then((_) => first = true);
-      await server.stop(drainTimeout: const Duration(seconds: 10));
+    var first = false;
+    final draining = server
+        .stop(drainTimeout: const Duration(seconds: 10))
+        .then((_) => first = true);
+    await server.stop(drainTimeout: const Duration(seconds: 10));
 
-      expect(
-        first,
-        isTrue,
-        reason: 'the second stop returned while the first was still draining',
-      );
-      await draining;
-      expect(await call, 'returned finished');
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    expect(
+      first,
+      isTrue,
+      reason: 'the second stop returned while the first was still draining',
+    );
+    await draining;
+    expect(await call, 'returned finished');
+  }, timeout: const Timeout(Duration(seconds: 90)));
 
   test(
     'CONTROL: without a drain the in-flight call is cut off, but correctly',
@@ -172,42 +164,36 @@ void main() {
     timeout: const Timeout(Duration(seconds: 90)),
   );
 
-  test(
-    'stop() stops accepting before it closes anything',
-    () async {
-      // The ordering fix. Previously the connections subscription was cancelled
-      // LAST, so a connection accepted mid-stop built an endpoint that was added
-      // to `_endpoints` after the clear and never closed.
-      http = await HttpServer.bind('127.0.0.1', 0);
-      server = RpcWebSocketServer(
-        connections: rpcWebSocketConnections(http),
-        mode: RpcResponderMode(
-          (e) => e.registerServiceContract(_SlowContract()),
-        ),
-      );
-      await server.start();
+  test('stop() stops accepting before it closes anything', () async {
+    // The ordering fix. Previously the connections subscription was cancelled
+    // LAST, so a connection accepted mid-stop built an endpoint that was added
+    // to `_endpoints` after the clear and never closed.
+    http = await HttpServer.bind('127.0.0.1', 0);
+    server = RpcWebSocketServer(
+      connections: rpcWebSocketConnections(http),
+      mode: RpcResponderMode((e) => e.registerServiceContract(_SlowContract())),
+    );
+    await server.start();
 
-      await server.stop();
+    await server.stop();
 
-      // A connection attempted after stop() must not produce a live endpoint.
-      try {
-        final late = await RpcWebSocketCallerTransport.connect(
-          Uri.parse('ws://127.0.0.1:${http.port}'),
-        ).timeout(const Duration(seconds: 3));
-        await late.close().catchError((Object _) {});
-      } catch (_) {
-        // Refused outright is also fine.
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+    // A connection attempted after stop() must not produce a live endpoint.
+    try {
+      final late = await RpcWebSocketCallerTransport.connect(
+        Uri.parse('ws://127.0.0.1:${http.port}'),
+      ).timeout(const Duration(seconds: 3));
+      await late.close().catchError((Object _) {});
+    } catch (_) {
+      // Refused outright is also fine.
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 300));
 
-      expect(
-        server.endpoints,
-        isEmpty,
-        reason:
-            'a connection arriving during or after shutdown must not leave an '
-            'endpoint nothing will ever close',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    expect(
+      server.endpoints,
+      isEmpty,
+      reason:
+          'a connection arriving during or after shutdown must not leave an '
+          'endpoint nothing will ever close',
+    );
+  }, timeout: const Timeout(Duration(seconds: 90)));
 }

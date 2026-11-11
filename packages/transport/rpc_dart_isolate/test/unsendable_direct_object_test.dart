@@ -210,122 +210,98 @@ void main() {
     spawned.kill();
   });
 
-  test(
-    'an unsendable request fails ITS call, naming the cause',
-    () async {
-      // WITNESS. Pre-fix this arrived as RpcStatusException(14) "Stream closed
-      // without receiving response" -- the connection dying, with the real
-      // reason swallowed by `catch (_)`.
-      await expectLater(
-        zcUnary('Unary', ZcReq('poison', trap: Future<int>.value(1))),
-        throwsA(
-          isA<ArgumentError>().having(
-            (e) => e.toString(),
-            'message',
-            allOf(contains('isolate boundary'), contains('unsendable')),
-          ),
+  test('an unsendable request fails ITS call, naming the cause', () async {
+    // WITNESS. Pre-fix this arrived as RpcStatusException(14) "Stream closed
+    // without receiving response" -- the connection dying, with the real
+    // reason swallowed by `catch (_)`.
+    await expectLater(
+      zcUnary('Unary', ZcReq('poison', trap: Future<int>.value(1))),
+      throwsA(
+        isA<ArgumentError>().having(
+          (e) => e.toString(),
+          'message',
+          allOf(contains('isolate boundary'), contains('unsendable')),
         ),
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+      ),
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'the connection survives a poisoned call',
-    () async {
-      // WITNESS. Pre-fix every later call failed with "Transport is closed".
-      await expectLater(
-        zcUnary('Unary', ZcReq('poison', trap: Future<int>.value(1))),
-        throwsA(isA<ArgumentError>()),
-      );
+  test('the connection survives a poisoned call', () async {
+    // WITNESS. Pre-fix every later call failed with "Transport is closed".
+    await expectLater(
+      zcUnary('Unary', ZcReq('poison', trap: Future<int>.value(1))),
+      throwsA(isA<ArgumentError>()),
+    );
 
-      final after = await unary('Unary', Req('after'));
-      expect(after.text, 'reply:after');
+    final after = await unary('Unary', Req('after'));
+    expect(after.text, 'reply:after');
 
-      final health = await spawned.transport.health();
-      expect(health.isHealthy, isTrue);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    final health = await spawned.transport.health();
+    expect(health.isHealthy, isTrue);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'an unrelated in-flight stream is not collateral damage',
-    () async {
-      // WITNESS, and the one that shows the real cost: pre-fix this stream
-      // stopped dead the moment an unrelated call was poisoned.
-      var ticks = 0;
-      Object? streamError;
-      final sub = caller
-          .serverStream<Req, Res>(
-            serviceName: _service,
-            methodName: 'Ticks',
-            request: Req('go'),
-            requestCodec: _req,
-            responseCodec: _res,
-          )
-          .listen((_) => ticks++, onError: (Object e) => streamError ??= e);
-      addTearDown(sub.cancel);
+  test('an unrelated in-flight stream is not collateral damage', () async {
+    // WITNESS, and the one that shows the real cost: pre-fix this stream
+    // stopped dead the moment an unrelated call was poisoned.
+    var ticks = 0;
+    Object? streamError;
+    final sub = caller
+        .serverStream<Req, Res>(
+          serviceName: _service,
+          methodName: 'Ticks',
+          request: Req('go'),
+          requestCodec: _req,
+          responseCodec: _res,
+        )
+        .listen((_) => ticks++, onError: (Object e) => streamError ??= e);
+    addTearDown(sub.cancel);
 
-      // Wait for it to RISE before asserting it keeps rising: polling straight
-      // for growth succeeds on a stream that never started.
-      while (ticks == 0) {
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-      }
-      final before = ticks;
+    // Wait for it to RISE before asserting it keeps rising: polling straight
+    // for growth succeeds on a stream that never started.
+    while (ticks == 0) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
+    final before = ticks;
 
-      await expectLater(
-        zcUnary('Unary', ZcReq('poison', trap: Future<int>.value(1))),
-        throwsA(isA<ArgumentError>()),
-      );
+    await expectLater(
+      zcUnary('Unary', ZcReq('poison', trap: Future<int>.value(1))),
+      throwsA(isA<ArgumentError>()),
+    );
 
-      await Future<void>.delayed(const Duration(milliseconds: 400));
-      expect(ticks, greaterThan(before));
-      expect(streamError, isNull);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    expect(ticks, greaterThan(before));
+    expect(streamError, isNull);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD: an ordinary call is not refused',
-    () async {
-      // Pairs with the witnesses above. Without it a mistyped "poison" fixture
-      // would make them pass while proving nothing.
-      final response = await unary('Unary', Req('hello'));
-      expect(response.text, 'reply:hello');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('GUARD: an ordinary call is not refused', () async {
+    // Pairs with the witnesses above. Without it a mistyped "poison" fixture
+    // would make them pass while proving nothing.
+    final response = await unary('Unary', Req('hello'));
+    expect(response.text, 'reply:hello');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD: a direct object is COPIED, not shared',
-    () async {
-      // Pins the corrected doc claim. `supportsZeroCopy` on this transport means
-      // "sendDirectObject works", not "the peer gets the same instance" --
-      // SendPort.send deep-copies anything that is not deeply immutable.
-      //
-      // On the ZERO-COPY service: through a codec the identity differs for the
-      // trivial reason that `fromJson` built a new object, which would prove
-      // nothing about copying.
-      final request = ZcReq('identity');
-      final response = await zcUnary('Identity', request);
-      expect(response.index, isNot(identityHashCode(request)));
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('GUARD: a direct object is COPIED, not shared', () async {
+    // Pins the corrected doc claim. `supportsZeroCopy` on this transport means
+    // "sendDirectObject works", not "the peer gets the same instance" --
+    // SendPort.send deep-copies anything that is not deeply immutable.
+    //
+    // On the ZERO-COPY service: through a codec the identity differs for the
+    // trivial reason that `fromJson` built a new object, which would prove
+    // nothing about copying.
+    final request = ZcReq('identity');
+    final response = await zcUnary('Identity', request);
+    expect(response.index, isNot(identityHashCode(request)));
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD: a call with codecs carries no raw object at all',
-    () async {
-      // The same poison that fails an object-path call is simply not on the
-      // wire when the call serializes, because `toJson` never looks at it.
-      final response = await unary(
-        'Unary',
-        Req('codec', trap: Future<int>.value(1)),
-      );
-      expect(response.text, 'reply:codec');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('GUARD: a call with codecs carries no raw object at all', () async {
+    // The same poison that fails an object-path call is simply not on the
+    // wire when the call serializes, because `toJson` never looks at it.
+    final response = await unary(
+      'Unary',
+      Req('codec', trap: Future<int>.value(1)),
+    );
+    expect(response.text, 'reply:codec');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   test(
     'a stream item that cannot be sent fails the call, not just that item',
@@ -371,26 +347,18 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
-  test(
-    'GUARD: a dead worker still ends the connection',
-    () async {
-      // The removed `close()` was never what detected a dead peer -- onExit is.
-      // This pins that the real mechanism still fires.
-      expect((await spawned.transport.health()).isHealthy, isTrue);
-      spawned.kill();
+  test('GUARD: a dead worker still ends the connection', () async {
+    // The removed `close()` was never what detected a dead peer -- onExit is.
+    // This pins that the real mechanism still fires.
+    expect((await spawned.transport.health()).isHealthy, isTrue);
+    spawned.kill();
 
-      final deadline = DateTime.now().add(const Duration(seconds: 10));
-      var healthy = true;
-      while (DateTime.now().isBefore(deadline) && healthy) {
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-        healthy = (await spawned.transport.health()).isHealthy;
-      }
-      expect(
-        healthy,
-        isFalse,
-        reason: 'a killed worker must close the channel',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    final deadline = DateTime.now().add(const Duration(seconds: 10));
+    var healthy = true;
+    while (DateTime.now().isBefore(deadline) && healthy) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      healthy = (await spawned.transport.health()).isHealthy;
+    }
+    expect(healthy, isFalse, reason: 'a killed worker must close the channel');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

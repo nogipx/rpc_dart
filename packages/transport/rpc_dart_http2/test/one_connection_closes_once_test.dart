@@ -70,32 +70,24 @@ Future<_Counts> _oneConnection({required bool speaks}) async {
 }
 
 void main() {
-  test(
-    'CONTROL a polite close reports one open and one close',
-    () async {
-      final c = await _oneConnection(speaks: true);
+  test('CONTROL a polite close reports one open and one close', () async {
+    final c = await _oneConnection(speaks: true);
 
-      expect(c.opened, 1);
-      expect(c.closed, 1);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(c.opened, 1);
+    expect(c.closed, 1);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'WITNESS a preface-deadline close reports it ONCE',
-    () async {
-      final c = await _oneConnection(speaks: false);
+  test('WITNESS a preface-deadline close reports it ONCE', () async {
+    final c = await _oneConnection(speaks: false);
 
-      expect(c.opened, 1);
-      expect(
-        c.closed,
-        1,
-        reason:
-            'the deadline releases the endpoint and destroys the socket, whose '
-            "`done` released it again — so the user's callback saw two closes "
-            'for one connection',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(c.opened, 1);
+    expect(
+      c.closed,
+      1,
+      reason:
+          'the deadline releases the endpoint and destroys the socket, whose '
+          "`done` released it again — so the user's callback saw two closes "
+          'for one connection',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

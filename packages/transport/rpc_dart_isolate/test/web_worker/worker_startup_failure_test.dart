@@ -66,41 +66,37 @@ Future<String> _callOnce(IRpcTransport transport) async {
 }
 
 void main() {
-  test(
-    'spawn() fails when the worker never boots',
-    () async {
-      final watch = Stopwatch()..start();
+  test('spawn() fails when the worker never boots', () async {
+    final watch = Stopwatch()..start();
 
-      await expectLater(
-        RpcIsolateTransport.spawn(
-          entrypoint: _unusedEntrypoint,
-          workerUri: _missingWorker,
+    await expectLater(
+      RpcIsolateTransport.spawn(
+        entrypoint: _unusedEntrypoint,
+        workerUri: _missingWorker,
+      ),
+      throwsA(
+        isA<RpcStatusException>().having(
+          (e) => e.statusCode,
+          'statusCode',
+          RpcStatus.unavailable,
         ),
-        throwsA(
-          isA<RpcStatusException>().having(
-            (e) => e.statusCode,
-            'statusCode',
-            RpcStatus.unavailable,
-          ),
-        ),
-        reason:
-            'nothing listened for the Worker error event, so both startup waits '
-            'simply expired and spawn() handed back a transport wired to a '
-            'worker that does not exist: health() said "healthy / Transport '
-            'ready" and every call hung forever',
-      );
+      ),
+      reason:
+          'nothing listened for the Worker error event, so both startup waits '
+          'simply expired and spawn() handed back a transport wired to a '
+          'worker that does not exist: health() said "healthy / Transport '
+          'ready" and every call hung forever',
+    );
 
-      watch.stop();
-      expect(
-        watch.elapsed,
-        lessThan(const Duration(seconds: 5)),
-        reason:
-            'the load failure is known immediately; waiting out both swallowed '
-            '5s budgets took 10002ms to reach the wrong answer',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    watch.stop();
+    expect(
+      watch.elapsed,
+      lessThan(const Duration(seconds: 5)),
+      reason:
+          'the load failure is known immediately; waiting out both swallowed '
+          '5s budgets took 10002ms to reach the wrong answer',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   test('startupTimeout is honoured', () async {
     // The parameter was accepted and never used -- 1s requested, 10002ms taken.
@@ -119,64 +115,56 @@ void main() {
     expect(watch.elapsed, lessThan(const Duration(seconds: 3)));
   }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'a worker that dies after startup is noticed',
-    () async {
-      final spawned = await RpcIsolateTransport.spawn(
-        entrypoint: _unusedEntrypoint,
-        workerUri: _realWorker,
-      );
-      addTearDown(spawned.kill);
+  test('a worker that dies after startup is noticed', () async {
+    final spawned = await RpcIsolateTransport.spawn(
+      entrypoint: _unusedEntrypoint,
+      workerUri: _realWorker,
+    );
+    addTearDown(spawned.kill);
 
-      expect(await _callOnce(spawned.transport), 'echo:ping');
+    expect(await _callOnce(spawned.transport), 'echo:ping');
 
-      final caller = RpcCallerEndpoint(transport: spawned.transport);
-      await expectLater(
-        caller
-            .unary<RpcString, RpcString>(
-              serviceName: 'EchoService',
-              methodName: 'Die',
-              requestCodec: RpcString.codec,
-              responseCodec: RpcString.codec,
-              request: 'go'.rpc,
-            )
-            .timeout(const Duration(seconds: 8)),
-        throwsA(isA<RpcStatusException>()),
-        reason: 'the in-flight call must fail, not hang, when the worker dies',
-      );
+    final caller = RpcCallerEndpoint(transport: spawned.transport);
+    await expectLater(
+      caller
+          .unary<RpcString, RpcString>(
+            serviceName: 'EchoService',
+            methodName: 'Die',
+            requestCodec: RpcString.codec,
+            responseCodec: RpcString.codec,
+            request: 'go'.rpc,
+          )
+          .timeout(const Duration(seconds: 8)),
+      throwsA(isA<RpcStatusException>()),
+      reason: 'the in-flight call must fail, not hang, when the worker dies',
+    );
 
-      await Future<void>.delayed(const Duration(seconds: 1));
+    await Future<void>.delayed(const Duration(seconds: 1));
 
-      expect(spawned.transport.isClosed, isTrue);
-      final health = await spawned.transport.health();
-      expect(
-        health.level,
-        isNot(RpcHealthLevel.healthy),
-        reason:
-            'health() is what a supervisor polls; a transport whose worker is '
-            'gone must not report healthy',
-      );
-      expect(await _callOnce(spawned.transport), startsWith('threw'));
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    expect(spawned.transport.isClosed, isTrue);
+    final health = await spawned.transport.health();
+    expect(
+      health.level,
+      isNot(RpcHealthLevel.healthy),
+      reason:
+          'health() is what a supervisor polls; a transport whose worker is '
+          'gone must not report healthy',
+    );
+    expect(await _callOnce(spawned.transport), startsWith('threw'));
+  }, timeout: const Timeout(Duration(seconds: 90)));
 
-  test(
-    'GUARD: a healthy worker is unaffected',
-    () async {
-      // The startup path gained an error race and a real timeout; the ordinary
-      // worker must still boot and serve, and must not be torn down by them.
-      final spawned = await RpcIsolateTransport.spawn(
-        entrypoint: _unusedEntrypoint,
-        workerUri: _realWorker,
-        startupTimeout: const Duration(seconds: 20),
-      );
-      addTearDown(spawned.kill);
+  test('GUARD: a healthy worker is unaffected', () async {
+    // The startup path gained an error race and a real timeout; the ordinary
+    // worker must still boot and serve, and must not be torn down by them.
+    final spawned = await RpcIsolateTransport.spawn(
+      entrypoint: _unusedEntrypoint,
+      workerUri: _realWorker,
+      startupTimeout: const Duration(seconds: 20),
+    );
+    addTearDown(spawned.kill);
 
-      expect(await _callOnce(spawned.transport), 'echo:ping');
-      expect(await _callOnce(spawned.transport), 'echo:ping');
-      expect(spawned.transport.isClosed, isFalse);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(await _callOnce(spawned.transport), 'echo:ping');
+    expect(await _callOnce(spawned.transport), 'echo:ping');
+    expect(spawned.transport.isClosed, isFalse);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

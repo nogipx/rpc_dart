@@ -104,212 +104,181 @@ Future<RpcString> _echo(
 );
 
 void main() {
-  test(
-    'a 413 carries WHICH limit was hit',
-    () async {
-      // WITNESS. Pre-fix: "HTTP 413 from /Svc/echo" and nothing else.
-      final caller = await _serve(
-        const RpcSecurityPolicy(maxMessageLengthBytes: 4096),
-      );
+  test('a 413 carries WHICH limit was hit', () async {
+    // WITNESS. Pre-fix: "HTTP 413 from /Svc/echo" and nothing else.
+    final caller = await _serve(
+      const RpcSecurityPolicy(maxMessageLengthBytes: 4096),
+    );
 
-      final error = await _errorOf(
-        _echo(caller, 'x' * (256 * 1024)).timeout(const Duration(seconds: 30)),
-      );
+    final error = await _errorOf(
+      _echo(caller, 'x' * (256 * 1024)).timeout(const Duration(seconds: 30)),
+    );
 
-      expect(error, isA<RpcStatusException>());
-      expect(
-        (error! as RpcStatusException).statusCode,
-        RpcStatus.resourceExhausted,
-      );
-      expect(
-        (error as RpcStatusException).message,
-        allOf(contains('413'), contains('Request body exceeds limit')),
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(error, isA<RpcStatusException>());
+    expect(
+      (error! as RpcStatusException).statusCode,
+      RpcStatus.resourceExhausted,
+    );
+    expect(
+      (error as RpcStatusException).message,
+      allOf(contains('413'), contains('Request body exceeds limit')),
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'a metadata rejection says it was the metadata',
-    () async {
-      // WITNESS. Pre-fix: "HTTP 400 from /Svc/echo", which does not distinguish a
-      // header violation from a malformed path or an unreadable body.
-      final caller = await _serve(const RpcSecurityPolicy(maxHeaders: 4));
+  test('a metadata rejection says it was the metadata', () async {
+    // WITNESS. Pre-fix: "HTTP 400 from /Svc/echo", which does not distinguish a
+    // header violation from a malformed path or an unreadable body.
+    final caller = await _serve(const RpcSecurityPolicy(maxHeaders: 4));
 
-      final context = RpcContext.withHeaders({
-        for (var i = 0; i < 50; i++) 'x-h$i': 'v',
-      });
-      final error = await _errorOf(
-        _echo(
-          caller,
-          'hi',
-          context: context,
-        ).timeout(const Duration(seconds: 30)),
-      );
-
-      expect(error, isA<RpcStatusException>());
-      expect(
-        (error! as RpcStatusException).message,
-        allOf(contains('400'), contains('Metadata violation')),
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
-
-  test(
-    'a foreign error body is bounded and single-line',
-    () async {
-      // A non-200 does not have to come from this library. A proxy answering with
-      // an HTML page must not paste the page into a status message.
-      final noisy = 'x' * 5000;
-      final http = await shelf_io.serve(
-        (shelf.Request _) =>
-            shelf.Response(502, body: '<html>\n\tbad gateway\n\n$noisy</html>'),
-        '127.0.0.1',
-        0,
-      );
-      addTearDown(() => http.close(force: true));
-
-      final caller = RpcCallerEndpoint(
-        transport: RpcHttpCallerTransport(
-          baseUrl: 'http://127.0.0.1:${http.port}',
-        ),
-      );
-      addTearDown(caller.close);
-
-      final error = await _errorOf(
-        _echo(caller, 'hi').timeout(const Duration(seconds: 30)),
-      );
-
-      expect(error, isA<RpcStatusException>());
-      final message = (error! as RpcStatusException).message;
-      expect(message, contains('502'));
-      expect(message, contains('bad gateway'));
-      expect(message.contains('\n'), isFalse, reason: 'collapsed to one line');
-      expect(
-        message.length,
-        lessThan(400),
-        reason: 'a whole page has no place in a status message',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
-
-  test(
-    'a BIG error page does not destroy the status it carried',
-    () async {
-      // WITNESS. The non-200 body used to be read through the same bound as a
-      // real response, which THROWS past maxMessageLengthBytes -- so a peer's
-      // status was destroyed by the size of the page carrying it. Measured with
-      // a 64 KiB client limit against a 256 KiB page:
-      //
-      //   small 502 : RpcStatusException(14)
-      //   BIG 502   : RpcException "HTTP response body exceeds the configured
-      //               limit of 65536 bytes"
-      //   BIG 401   : the same
-      //
-      // Losing UNAVAILABLE costs more than the text: RpcRetryInterceptor
-      // retries it and does not retry a bare RpcException.
-      final http = await shelf_io.serve(
-        (shelf.Request _) =>
-            shelf.Response(502, body: 'gateway said no ${'x' * (256 * 1024)}'),
-        '127.0.0.1',
-        0,
-      );
-      addTearDown(() => http.close(force: true));
-
-      final caller = RpcCallerEndpoint(
-        transport: RpcHttpCallerTransport(
-          baseUrl: 'http://127.0.0.1:${http.port}',
-          policy: const RpcSecurityPolicy(maxMessageLengthBytes: 64 * 1024),
-        ),
-      );
-      addTearDown(caller.close);
-
-      final error = await _errorOf(
-        _echo(caller, 'hi').timeout(const Duration(seconds: 30)),
-      );
-
-      expect(error, isA<RpcStatusException>());
-      expect(
-        (error! as RpcStatusException).statusCode,
-        RpcStatus.unavailable,
-        reason: '502 is retryable; the page size must not change that',
-      );
-      expect(
-        (error as RpcStatusException).message,
-        contains('gateway said no'),
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
-
-  test(
-    'GUARD: a real response over the limit is still refused',
-    () async {
-      // The bound that DOES belong on a 200: the body is about to be decoded,
-      // so an oversized one has to fail rather than be truncated.
-      final caller = await _serve(
-        const RpcSecurityPolicy(),
-        clientPolicy: const RpcSecurityPolicy(maxMessageLengthBytes: 16),
-      );
-
-      final error = await _errorOf(
-        caller
-            .unary<RpcString, RpcString>(
-              serviceName: 'Svc',
-              methodName: 'big',
-              request: 'hi'.rpc,
-              requestCodec: _codec,
-              responseCodec: _codec,
-            )
-            .timeout(const Duration(seconds: 30)),
-      );
-
-      expect(error, isA<RpcException>());
-      expect('$error', contains('exceeds the configured limit'));
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
-
-  test(
-    'GUARD: an empty error body still gives the old message',
-    () async {
-      // Nothing to repeat must not produce a trailing separator or an empty tail.
-      final http = await shelf_io.serve(
-        (shelf.Request _) => shelf.Response(503),
-        '127.0.0.1',
-        0,
-      );
-      addTearDown(() => http.close(force: true));
-
-      final caller = RpcCallerEndpoint(
-        transport: RpcHttpCallerTransport(
-          baseUrl: 'http://127.0.0.1:${http.port}',
-        ),
-      );
-      addTearDown(caller.close);
-
-      final error = await _errorOf(
-        _echo(caller, 'hi').timeout(const Duration(seconds: 30)),
-      );
-
-      expect(error, isA<RpcStatusException>());
-      expect((error! as RpcStatusException).message, endsWith('/Svc/echo'));
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
-
-  test(
-    'GUARD: a successful call is untouched',
-    () async {
-      final caller = await _serve(const RpcSecurityPolicy());
-      final response = await _echo(
+    final context = RpcContext.withHeaders({
+      for (var i = 0; i < 50; i++) 'x-h$i': 'v',
+    });
+    final error = await _errorOf(
+      _echo(
         caller,
         'hi',
-      ).timeout(const Duration(seconds: 30));
-      expect(response.value, 'ok');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+        context: context,
+      ).timeout(const Duration(seconds: 30)),
+    );
+
+    expect(error, isA<RpcStatusException>());
+    expect(
+      (error! as RpcStatusException).message,
+      allOf(contains('400'), contains('Metadata violation')),
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
+
+  test('a foreign error body is bounded and single-line', () async {
+    // A non-200 does not have to come from this library. A proxy answering with
+    // an HTML page must not paste the page into a status message.
+    final noisy = 'x' * 5000;
+    final http = await shelf_io.serve(
+      (shelf.Request _) =>
+          shelf.Response(502, body: '<html>\n\tbad gateway\n\n$noisy</html>'),
+      '127.0.0.1',
+      0,
+    );
+    addTearDown(() => http.close(force: true));
+
+    final caller = RpcCallerEndpoint(
+      transport: RpcHttpCallerTransport(
+        baseUrl: 'http://127.0.0.1:${http.port}',
+      ),
+    );
+    addTearDown(caller.close);
+
+    final error = await _errorOf(
+      _echo(caller, 'hi').timeout(const Duration(seconds: 30)),
+    );
+
+    expect(error, isA<RpcStatusException>());
+    final message = (error! as RpcStatusException).message;
+    expect(message, contains('502'));
+    expect(message, contains('bad gateway'));
+    expect(message.contains('\n'), isFalse, reason: 'collapsed to one line');
+    expect(
+      message.length,
+      lessThan(400),
+      reason: 'a whole page has no place in a status message',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
+
+  test('a BIG error page does not destroy the status it carried', () async {
+    // WITNESS. The non-200 body used to be read through the same bound as a
+    // real response, which THROWS past maxMessageLengthBytes -- so a peer's
+    // status was destroyed by the size of the page carrying it. Measured with
+    // a 64 KiB client limit against a 256 KiB page:
+    //
+    //   small 502 : RpcStatusException(14)
+    //   BIG 502   : RpcException "HTTP response body exceeds the configured
+    //               limit of 65536 bytes"
+    //   BIG 401   : the same
+    //
+    // Losing UNAVAILABLE costs more than the text: RpcRetryInterceptor
+    // retries it and does not retry a bare RpcException.
+    final http = await shelf_io.serve(
+      (shelf.Request _) =>
+          shelf.Response(502, body: 'gateway said no ${'x' * (256 * 1024)}'),
+      '127.0.0.1',
+      0,
+    );
+    addTearDown(() => http.close(force: true));
+
+    final caller = RpcCallerEndpoint(
+      transport: RpcHttpCallerTransport(
+        baseUrl: 'http://127.0.0.1:${http.port}',
+        policy: const RpcSecurityPolicy(maxMessageLengthBytes: 64 * 1024),
+      ),
+    );
+    addTearDown(caller.close);
+
+    final error = await _errorOf(
+      _echo(caller, 'hi').timeout(const Duration(seconds: 30)),
+    );
+
+    expect(error, isA<RpcStatusException>());
+    expect(
+      (error! as RpcStatusException).statusCode,
+      RpcStatus.unavailable,
+      reason: '502 is retryable; the page size must not change that',
+    );
+    expect((error as RpcStatusException).message, contains('gateway said no'));
+  }, timeout: const Timeout(Duration(seconds: 60)));
+
+  test('GUARD: a real response over the limit is still refused', () async {
+    // The bound that DOES belong on a 200: the body is about to be decoded,
+    // so an oversized one has to fail rather than be truncated.
+    final caller = await _serve(
+      const RpcSecurityPolicy(),
+      clientPolicy: const RpcSecurityPolicy(maxMessageLengthBytes: 16),
+    );
+
+    final error = await _errorOf(
+      caller
+          .unary<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: 'big',
+            request: 'hi'.rpc,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .timeout(const Duration(seconds: 30)),
+    );
+
+    expect(error, isA<RpcException>());
+    expect('$error', contains('exceeds the configured limit'));
+  }, timeout: const Timeout(Duration(seconds: 60)));
+
+  test('GUARD: an empty error body still gives the old message', () async {
+    // Nothing to repeat must not produce a trailing separator or an empty tail.
+    final http = await shelf_io.serve(
+      (shelf.Request _) => shelf.Response(503),
+      '127.0.0.1',
+      0,
+    );
+    addTearDown(() => http.close(force: true));
+
+    final caller = RpcCallerEndpoint(
+      transport: RpcHttpCallerTransport(
+        baseUrl: 'http://127.0.0.1:${http.port}',
+      ),
+    );
+    addTearDown(caller.close);
+
+    final error = await _errorOf(
+      _echo(caller, 'hi').timeout(const Duration(seconds: 30)),
+    );
+
+    expect(error, isA<RpcStatusException>());
+    expect((error! as RpcStatusException).message, endsWith('/Svc/echo'));
+  }, timeout: const Timeout(Duration(seconds: 60)));
+
+  test('GUARD: a successful call is untouched', () async {
+    final caller = await _serve(const RpcSecurityPolicy());
+    final response = await _echo(
+      caller,
+      'hi',
+    ).timeout(const Duration(seconds: 30));
+    expect(response.value, 'ok');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

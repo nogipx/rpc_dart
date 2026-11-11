@@ -140,111 +140,91 @@ Future<Object?> _errorOf(
 }
 
 void main() {
-  test(
-    "a handler's chosen status survives a tight header cap",
-    () async {
-      // WITNESS. Pre-fix the trailer failed validation, the throw escaped into
-      // _detachedDispatch, and the peer was told INTERNAL "Responder dispatch
-      // failed" -- the wrong code AND none of the reason.
-      final caller = _rig(const RpcSecurityPolicy(maxHeaderValueBytes: 64));
+  test("a handler's chosen status survives a tight header cap", () async {
+    // WITNESS. Pre-fix the trailer failed validation, the throw escaped into
+    // _detachedDispatch, and the peer was told INTERNAL "Responder dispatch
+    // failed" -- the wrong code AND none of the reason.
+    final caller = _rig(const RpcSecurityPolicy(maxHeaderValueBytes: 64));
 
-      final error = await _errorOf(caller, 'deny');
+    final error = await _errorOf(caller, 'deny');
 
-      expect(error, isA<RpcStatusException>());
-      expect(
-        (error! as RpcStatusException).statusCode,
-        RpcStatus.permissionDenied,
-        reason: 'the code the service chose must reach the peer',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(error, isA<RpcStatusException>());
+    expect(
+      (error! as RpcStatusException).statusCode,
+      RpcStatus.permissionDenied,
+      reason: 'the code the service chose must reach the peer',
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
-  test(
-    'the message is trimmed, not dropped',
-    () async {
-      // What gives way is the text, and only as much as it must.
-      final caller = _rig(const RpcSecurityPolicy(maxHeaderValueBytes: 64));
+  test('the message is trimmed, not dropped', () async {
+    // What gives way is the text, and only as much as it must.
+    final caller = _rig(const RpcSecurityPolicy(maxHeaderValueBytes: 64));
 
-      final error = await _errorOf(caller, 'deny');
+    final error = await _errorOf(caller, 'deny');
 
-      final message = (error! as RpcStatusException).message;
-      expect(message, isNotEmpty);
-      expect(
-        _longMessage,
-        startsWith(message),
-        reason: 'a prefix of what the handler said, not something else',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    final message = (error! as RpcStatusException).message;
+    expect(message, isNotEmpty);
+    expect(
+      _longMessage,
+      startsWith(message),
+      reason: 'a prefix of what the handler said, not something else',
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
-  test(
-    'GUARD: a generous cap delivers the whole message',
-    () async {
-      // Pairs with the witnesses: trimming must not happen when nothing requires
-      // it, or the first test would pass on an implementation that always
-      // truncated.
-      final caller = _rig(const RpcSecurityPolicy());
+  test('GUARD: a generous cap delivers the whole message', () async {
+    // Pairs with the witnesses: trimming must not happen when nothing requires
+    // it, or the first test would pass on an implementation that always
+    // truncated.
+    final caller = _rig(const RpcSecurityPolicy());
 
-      final error = await _errorOf(caller, 'deny');
+    final error = await _errorOf(caller, 'deny');
 
-      expect(
-        (error! as RpcStatusException).statusCode,
-        RpcStatus.permissionDenied,
-      );
-      expect((error as RpcStatusException).message, _longMessage);
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(
+      (error! as RpcStatusException).statusCode,
+      RpcStatus.permissionDenied,
+    );
+    expect((error as RpcStatusException).message, _longMessage);
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
-  test(
-    'the hand-built trailers are capped too',
-    () async {
-      // WITNESS for the sites round 175 MISSED, because they built the headers
-      // by hand and so did not match a grep for `RpcTrailers.status`.
-      // `_handleUnsupportedZeroCopy` answers "Zero-copy method $methodKey
-      // requires zero-copy transport", and `methodKey` is a name the service
-      // author chooses -- 133 characters here. Measured over websocket:
-      //
-      //   cap 8192 : status 12
-      //   cap   64 : SILENCE, no answer in 6 s
-      //
-      // The frame channel pair reports supportsZeroCopy == false, so a
-      // zero-copy method registered on it takes exactly that path.
-      final caller = _rig(const RpcSecurityPolicy(maxHeaderValueBytes: 64));
+  test('the hand-built trailers are capped too', () async {
+    // WITNESS for the sites round 175 MISSED, because they built the headers
+    // by hand and so did not match a grep for `RpcTrailers.status`.
+    // `_handleUnsupportedZeroCopy` answers "Zero-copy method $methodKey
+    // requires zero-copy transport", and `methodKey` is a name the service
+    // author chooses -- 133 characters here. Measured over websocket:
+    //
+    //   cap 8192 : status 12
+    //   cap   64 : SILENCE, no answer in 6 s
+    //
+    // The frame channel pair reports supportsZeroCopy == false, so a
+    // zero-copy method registered on it takes exactly that path.
+    final caller = _rig(const RpcSecurityPolicy(maxHeaderValueBytes: 64));
 
-      final error = await _errorOf(caller, _longMethodName, service: 'Zc');
+    final error = await _errorOf(caller, _longMethodName, service: 'Zc');
 
-      expect(error, isA<RpcStatusException>());
-      expect(
-        (error! as RpcStatusException).statusCode,
-        RpcStatus.unimplemented,
-        reason: 'a method the server cannot serve must be refused, not ignored',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(error, isA<RpcStatusException>());
+    expect(
+      (error! as RpcStatusException).statusCode,
+      RpcStatus.unimplemented,
+      reason: 'a method the server cannot serve must be refused, not ignored',
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
-  test(
-    'GUARD: an ordinary call is unaffected by the tight cap',
-    () async {
-      // The cap is small but workable; without this the witnesses could pass on a
-      // transport that refused everything.
-      final caller = _rig(const RpcSecurityPolicy(maxHeaderValueBytes: 64));
+  test('GUARD: an ordinary call is unaffected by the tight cap', () async {
+    // The cap is small but workable; without this the witnesses could pass on a
+    // transport that refused everything.
+    final caller = _rig(const RpcSecurityPolicy(maxHeaderValueBytes: 64));
 
-      final response = await caller
-          .unary<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'ok',
-            request: 'hi'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          )
-          .timeout(const Duration(seconds: 10));
+    final response = await caller
+        .unary<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'ok',
+          request: 'hi'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .timeout(const Duration(seconds: 10));
 
-      expect(response.value, 'ok');
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(response.value, 'ok');
+  }, timeout: const Timeout(Duration(seconds: 30)));
 }

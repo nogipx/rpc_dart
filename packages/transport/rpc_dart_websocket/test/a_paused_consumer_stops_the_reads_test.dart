@@ -83,29 +83,21 @@ void main() {
 
   // CONTROL: without a pause everything must still arrive. A channel that had
   // stopped reading altogether would pass the witness.
-  test(
-    'CONTROL: an unpaused consumer receives everything',
-    () async {
-      final run = await _run(pause: false);
+  test('CONTROL: an unpaused consumer receives everything', () async {
+    final run = await _run(pause: false);
 
-      expect(run.pulled, _cap);
-      expect(run.delivered, _cap);
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(run.pulled, _cap);
+    expect(run.delivered, _cap);
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
   // CONTROL: and the pause must not be permanent — resuming has to restart the
   // reads, or backpressure has become a hang.
-  test(
-    'CONTROL: resuming restarts the reads',
-    () async {
-      final run = await _run(pause: true, resumeAfter: true);
+  test('CONTROL: resuming restarts the reads', () async {
+    final run = await _run(pause: true, resumeAfter: true);
 
-      expect(run.pulled, _cap);
-      expect(run.delivered, _cap);
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(run.pulled, _cap);
+    expect(run.delivered, _cap);
+  }, timeout: const Timeout(Duration(seconds: 30)));
 }
 
 class _Fake extends StreamChannelMixin<Object?> implements WebSocketChannel {

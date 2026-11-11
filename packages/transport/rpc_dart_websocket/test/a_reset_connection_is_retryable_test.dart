@@ -154,56 +154,48 @@ Future<_Ending> _callThrough({
 }
 
 void main() {
-  test(
-    'WITNESS: a reset connection fails the call as UNAVAILABLE',
-    () async {
-      final end = await _callThrough(
-        viaRelay: true,
-        end: (relay, _) async => relay!.reset(),
-      );
+  test('WITNESS: a reset connection fails the call as UNAVAILABLE', () async {
+    final end = await _callThrough(
+      viaRelay: true,
+      end: (relay, _) async => relay!.reset(),
+    );
 
-      expect(
-        end.closeCode,
-        1002,
-        reason:
-            'the rig did not produce a reset, so the rest of this test measures '
-            'nothing — check that closing with unread bytes still sends RST',
-      );
-      expect(
-        end.status,
-        RpcStatus.unavailable,
-        reason:
-            'INTERNAL is not retried, so the commonest transient network '
-            'failure is permanent for the caller',
-      );
-      expect(
-        end.message,
-        isNot(contains('by peer')),
-        reason:
-            'the peer said nothing — dart:io chose 1002 locally, and the message '
-            'sends a reader after something that never happened',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      end.closeCode,
+      1002,
+      reason:
+          'the rig did not produce a reset, so the rest of this test measures '
+          'nothing — check that closing with unread bytes still sends RST',
+    );
+    expect(
+      end.status,
+      RpcStatus.unavailable,
+      reason:
+          'INTERNAL is not retried, so the commonest transient network '
+          'failure is permanent for the caller',
+    );
+    expect(
+      end.message,
+      isNot(contains('by peer')),
+      reason:
+          'the peer said nothing — dart:io chose 1002 locally, and the message '
+          'sends a reader after something that never happened',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   // CONTROL: a code the peer really sent must keep its meaning. Mapping 1002 to
   // UNAVAILABLE is only correct if it does not drag the rest of the table with
   // it.
-  test(
-    'CONTROL: a peer that really closes 1011 is still INTERNAL',
-    () async {
-      final end = await _callThrough(
-        viaRelay: false,
-        end: (_, peer) => peer.close(1011, 'server fault'),
-      );
+  test('CONTROL: a peer that really closes 1011 is still INTERNAL', () async {
+    final end = await _callThrough(
+      viaRelay: false,
+      end: (_, peer) => peer.close(1011, 'server fault'),
+    );
 
-      expect(end.closeCode, 1011);
-      expect(end.status, RpcStatus.internal);
-      expect(end.message, contains('by peer'));
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(end.closeCode, 1011);
+    expect(end.status, RpcStatus.internal);
+    expect(end.message, contains('by peer'));
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   // CONTROL: and the silent ending stays on the path reconnect() re-attaches on,
   // which is where three earlier tests broke when this file's rule was widened.
@@ -228,28 +220,24 @@ void main() {
   // The web half. `HtmlWebSocketChannel` reports a socket failure as an ERROR on
   // the stream rather than a close, so this asks the same question through a
   // channel that errors — which can be driven on the VM.
-  test(
-    'WITNESS: a raw channel error reaches the caller as a status',
-    () async {
-      final rig = _ErroringRig();
-      final failure = await rig.callThenRaise(
-        WebSocketChannelException('connection failed'),
-      );
+  test('WITNESS: a raw channel error reaches the caller as a status', () async {
+    final rig = _ErroringRig();
+    final failure = await rig.callThenRaise(
+      WebSocketChannelException('connection failed'),
+    );
 
-      expect(
-        failure,
-        isA<RpcStatusException>().having(
-          (e) => e.statusCode,
-          'statusCode',
-          RpcStatus.unavailable,
-        ),
-        reason:
-            'the caller received the channel package\'s own exception type, '
-            'which carries no gRPC status for anything above to act on',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      failure,
+      isA<RpcStatusException>().having(
+        (e) => e.statusCode,
+        'statusCode',
+        RpcStatus.unavailable,
+      ),
+      reason:
+          'the caller received the channel package\'s own exception type, '
+          'which carries no gRPC status for anything above to act on',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   // CONTROL: an ADVISORY report must still arrive as itself. It says one frame
   // was discarded, not that the connection is gone, and wrapping it as a

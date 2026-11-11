@@ -418,24 +418,20 @@ void main() {
     // therefore stay bounded on the WIRE whether the decorator forwards the
     // inner credit object or hands out its own that forwards to it.
     for (final shape in const ['none', 'plain', 'forwards']) {
-      test(
-        '$shape: a deaf handler still bounds the upload',
-        () async {
-          final r = await _upload(switch (shape) {
-            'plain' => _CountingTransport.new,
-            'forwards' => _ForwardingFlowTransport.new,
-            _ => null,
-          });
-          expect(
-            r,
-            lessThan(_uploadCeilingBytes),
-            reason:
-                '${(r / 1024 / 1024).toStringAsFixed(1)} MiB reached a server '
-                'whose handler consumed nothing, against a 4 MiB window',
-          );
-        },
-        timeout: const Timeout(Duration(seconds: 120)),
-      );
+      test('$shape: a deaf handler still bounds the upload', () async {
+        final r = await _upload(switch (shape) {
+          'plain' => _CountingTransport.new,
+          'forwards' => _ForwardingFlowTransport.new,
+          _ => null,
+        });
+        expect(
+          r,
+          lessThan(_uploadCeilingBytes),
+          reason:
+              '${(r / 1024 / 1024).toStringAsFixed(1)} MiB reached a server '
+              'whose handler consumed nothing, against a 4 MiB window',
+        );
+      }, timeout: const Timeout(Duration(seconds: 120)));
     }
   });
 }

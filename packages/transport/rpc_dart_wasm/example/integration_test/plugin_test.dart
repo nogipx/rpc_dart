@@ -151,32 +151,30 @@ void main() {
     expect(line, startsWith('E:'), reason: 'it is an error, not info');
   });
 
-  testWidgets(
-    'an uncaught error outside any handler reaches the host',
-    (_) async {
-      // WITNESS, iOS. `window.onerror` was added to report a throw during BOOT
-      // and returns true, which suppresses the platform's own reporting -- but
-      // once boot is answered `_rpcReportBoot` is a no-op, so a later uncaught
-      // error was swallowed by the very hook meant to surface it.
-      //
-      // _nativeSetTimeout, not the polyfill: the timer runners above already
-      // catch, so a throw there would prove nothing about THIS path.
-      //
-      // Android cannot reach this state and is not skipped out of convenience:
-      // it is a bare V8 isolate with no event loop, so every entry into guest
-      // code comes from the Kotlin driver through evaluateJavaScriptAsync and is
-      // caught there. There is no "outside any handler" to test.
-      final line = await consoleAfterBoot(
-        '_nativeSetTimeout(function() { '
-            'throw new Error("post-boot boom"); }, 200);',
-        'post-boot boom',
-      );
+  testWidgets('an uncaught error outside any handler reaches the host', (
+    _,
+  ) async {
+    // WITNESS, iOS. `window.onerror` was added to report a throw during BOOT
+    // and returns true, which suppresses the platform's own reporting -- but
+    // once boot is answered `_rpcReportBoot` is a no-op, so a later uncaught
+    // error was swallowed by the very hook meant to surface it.
+    //
+    // _nativeSetTimeout, not the polyfill: the timer runners above already
+    // catch, so a throw there would prove nothing about THIS path.
+    //
+    // Android cannot reach this state and is not skipped out of convenience:
+    // it is a bare V8 isolate with no event loop, so every entry into guest
+    // code comes from the Kotlin driver through evaluateJavaScriptAsync and is
+    // caught there. There is no "outside any handler" to test.
+    final line = await consoleAfterBoot(
+      '_nativeSetTimeout(function() { '
+          'throw new Error("post-boot boom"); }, 200);',
+      'post-boot boom',
+    );
 
-      expect(line, startsWith('E:'), reason: 'it is an error, not info');
-      expect(line, contains('uncaught'));
-    },
-    skip: !Platform.isIOS,
-  );
+    expect(line, startsWith('E:'), reason: 'it is an error, not info');
+    expect(line, contains('uncaught'));
+  }, skip: !Platform.isIOS);
 
   testWidgets('an unhandled rejection after boot reaches the host', (_) async {
     // WITNESS, iOS. A Dart guest's unawaited failing Future surfaces as a
@@ -268,59 +266,46 @@ void main() {
     expect('$error', isNot(contains('"error":null')));
   });
 
-  testWidgets(
-    'bytes survive the round trip, across the size threshold',
-    (_) async {
-      // The plugin IS a byte pipe and no device test moved a byte through it
-      // until now. Two ceilings are crossed here:
-      //
-      //  * Android splits host->guest at NAMED_DATA_THRESHOLD = 65536 --
-      //    base64 below, provideNamedData above -- and neither branch had ever
-      //    run.
-      //  * 16 MiB is rpc_dart's own default maxMessageLengthBytes, so a guest
-      //    may legally send one. WITNESS: guest->host leaves as the return
-      //    value of evaluateJavaScriptAsync, capped at 20 MiB, and 16 MiB of
-      //    base64 is 22.4 MB -- so it killed the whole runtime:
-      //
-      //      before : RpcStatusException(14) ... died: AssetFileDescriptor
-      //               .getLength() should be <= 20971520
-      //      after  : ok
-      //
-      //    iOS never had it: its byte path is raw, with no base64 expansion.
-      final bridge = await RpcFlutterWasmBridge.load(
-        wasmBytes: Uint8List.fromList([0, 1, 2, 3]),
-        mjsCode: _echoGuest,
-      ).timeout(const Duration(seconds: 45));
+  testWidgets('bytes survive the round trip, across the size threshold', (
+    _,
+  ) async {
+    // The plugin IS a byte pipe and no device test moved a byte through it
+    // until now. Two ceilings are crossed here:
+    //
+    //  * Android splits host->guest at NAMED_DATA_THRESHOLD = 65536 --
+    //    base64 below, provideNamedData above -- and neither branch had ever
+    //    run.
+    //  * 16 MiB is rpc_dart's own default maxMessageLengthBytes, so a guest
+    //    may legally send one. WITNESS: guest->host leaves as the return
+    //    value of evaluateJavaScriptAsync, capped at 20 MiB, and 16 MiB of
+    //    base64 is 22.4 MB -- so it killed the whole runtime:
+    //
+    //      before : RpcStatusException(14) ... died: AssetFileDescriptor
+    //               .getLength() should be <= 20971520
+    //      after  : ok
+    //
+    //    iOS never had it: its byte path is raw, with no base64 expansion.
+    final bridge = await RpcFlutterWasmBridge.load(
+      wasmBytes: Uint8List.fromList([0, 1, 2, 3]),
+      mjsCode: _echoGuest,
+    ).timeout(const Duration(seconds: 45));
 
-      final reader = _Inbox(bridge.incoming);
+    final reader = _Inbox(bridge.incoming);
 
-      for (final n in [
-        1,
-        1024,
-        65535,
-        65536,
-        65537,
-        262144,
-        16 * 1024 * 1024,
-      ]) {
-        final sent = Uint8List.fromList(
-          List<int>.generate(n, (i) => (i * 31 + 7) & 0xFF),
-        );
-        await bridge.send(sent);
-        final got = await reader
-            .take(n)
-            .timeout(
-              const Duration(seconds: 60),
-              onTimeout: () => Uint8List(0),
-            );
-        expect(got, orderedEquals(sent), reason: 'round trip of $n bytes');
-      }
+    for (final n in [1, 1024, 65535, 65536, 65537, 262144, 16 * 1024 * 1024]) {
+      final sent = Uint8List.fromList(
+        List<int>.generate(n, (i) => (i * 31 + 7) & 0xFF),
+      );
+      await bridge.send(sent);
+      final got = await reader
+          .take(n)
+          .timeout(const Duration(seconds: 60), onTimeout: () => Uint8List(0));
+      expect(got, orderedEquals(sent), reason: 'round trip of $n bytes');
+    }
 
-      await reader.cancel();
-      await bridge.close();
-    },
-    timeout: const Timeout(Duration(minutes: 8)),
-  );
+    await reader.cancel();
+    await bridge.close();
+  }, timeout: const Timeout(Duration(minutes: 8)));
 }
 
 /// Boots without a real module and echoes every inbound frame straight back.

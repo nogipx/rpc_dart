@@ -77,98 +77,92 @@ final class _BulkContract extends RpcResponderContract {
 }
 
 void main() {
-  test(
-    'a repeat getMessagesForStream is metered too',
-    () async {
-      final server = RpcHttp2Server(
-        host: '127.0.0.1',
-        port: 0,
-        mode: RpcResponderMode(
-          (e) => e.registerServiceContract(_BulkContract()),
-        ),
-      );
-      await server.start();
+  test('a repeat getMessagesForStream is metered too', () async {
+    final server = RpcHttp2Server(
+      host: '127.0.0.1',
+      port: 0,
+      mode: RpcResponderMode((e) => e.registerServiceContract(_BulkContract())),
+    );
+    await server.start();
 
-      final transport = await RpcHttp2CallerTransport.connect(
-        host: '127.0.0.1',
-        port: server.port,
-      );
+    final transport = await RpcHttp2CallerTransport.connect(
+      host: '127.0.0.1',
+      port: server.port,
+    );
 
-      // Driven at the TRANSPORT level on purpose: the endpoint pipeline asks
-      // for a stream once, so it cannot reach the second-call path at all.
-      final id = transport.createStream();
-      await transport.sendMetadata(
-        id,
-        RpcMetadata.forClientRequest('Svc', 'Bulk'),
-      );
-      await transport.sendMessage(
-        id,
-        // The library's own serializer, not a hand-built body: the wire format
-        // is CBOR and nothing in the request shape says so (lesson L-10).
-        RpcMessageFrame.encode(_codec.serialize('go'.rpc)),
-        endStream: true,
-      );
+    // Driven at the TRANSPORT level on purpose: the endpoint pipeline asks
+    // for a stream once, so it cannot reach the second-call path at all.
+    final id = transport.createStream();
+    await transport.sendMetadata(
+      id,
+      RpcMetadata.forClientRequest('Svc', 'Bulk'),
+    );
+    await transport.sendMessage(
+      id,
+      // The library's own serializer, not a hand-built body: the wire format
+      // is CBOR and nothing in the request shape says so (lesson L-10).
+      RpcMessageFrame.encode(_codec.serialize('go'.rpc)),
+      endStream: true,
+    );
 
-      // The first view is never listened to. Both calls return the same
-      // controller's stream, so this is the whole defect: which call did the
-      // consumer get?
-      transport.getMessagesForStream(id);
-      final second = transport.getMessagesForStream(id);
+    // The first view is never listened to. Both calls return the same
+    // controller's stream, so this is the whole defect: which call did the
+    // consumer get?
+    transport.getMessagesForStream(id);
+    final second = transport.getMessagesForStream(id);
 
-      var payloadBytes = 0;
-      Object? failure;
-      String? trailerStatus;
-      String? trailerMessage;
-      final done = Completer<void>();
+    var payloadBytes = 0;
+    Object? failure;
+    String? trailerStatus;
+    String? trailerMessage;
+    final done = Completer<void>();
 
-      var frames = 0;
-      second.listen(
-        (m) {
-          frames++;
-          payloadBytes += m.payload?.length ?? 0;
-          final headers = m.metadata?.headers;
-          if (headers != null) {
-            for (final h in headers) {
-              if (h.name == RpcHeaders.grpcStatus) trailerStatus = h.value;
-              if (h.name == RpcHeaders.grpcMessage) trailerMessage = h.value;
-            }
+    var frames = 0;
+    second.listen(
+      (m) {
+        frames++;
+        payloadBytes += m.payload?.length ?? 0;
+        final headers = m.metadata?.headers;
+        if (headers != null) {
+          for (final h in headers) {
+            if (h.name == RpcHeaders.grpcStatus) trailerStatus = h.value;
+            if (h.name == RpcHeaders.grpcMessage) trailerMessage = h.value;
           }
-          if (trailerStatus != null && !done.isCompleted) done.complete();
-        },
-        onError: (Object e) {
-          failure ??= e;
-          if (!done.isCompleted) done.complete();
-        },
-        onDone: () {
-          if (!done.isCompleted) done.complete();
-        },
-      );
+        }
+        if (trailerStatus != null && !done.isCompleted) done.complete();
+      },
+      onError: (Object e) {
+        failure ??= e;
+        if (!done.isCompleted) done.complete();
+      },
+      onDone: () {
+        if (!done.isCompleted) done.complete();
+      },
+    );
 
-      await done.future.timeout(const Duration(seconds: 60));
+    await done.future.timeout(const Duration(seconds: 60));
 
-      // Unmetered, the counter reaches 5 MiB against a 4 MiB window and the
-      // call is failed with RESOURCE_EXHAUSTED plus an RST_STREAM.
-      expect(
-        failure,
-        isNull,
-        reason:
-            'the repeat getMessagesForStream was not metered: consuming '
-            '$payloadBytes bytes never discharged the un-consumed window, so '
-            'the call was failed for bytes it had actually read',
-      );
-      expect(
-        payloadBytes,
-        greaterThan(_chunks * _chunkBytes ~/ 2),
-        reason:
-            'only $payloadBytes bytes in $frames frame(s) arrived '
-            '(grpc-status $trailerStatus, $trailerMessage); the stream was cut '
-            'short before it could cross the window at all, so this run proves '
-            'nothing',
-      );
+    // Unmetered, the counter reaches 5 MiB against a 4 MiB window and the
+    // call is failed with RESOURCE_EXHAUSTED plus an RST_STREAM.
+    expect(
+      failure,
+      isNull,
+      reason:
+          'the repeat getMessagesForStream was not metered: consuming '
+          '$payloadBytes bytes never discharged the un-consumed window, so '
+          'the call was failed for bytes it had actually read',
+    );
+    expect(
+      payloadBytes,
+      greaterThan(_chunks * _chunkBytes ~/ 2),
+      reason:
+          'only $payloadBytes bytes in $frames frame(s) arrived '
+          '(grpc-status $trailerStatus, $trailerMessage); the stream was cut '
+          'short before it could cross the window at all, so this run proves '
+          'nothing',
+    );
 
-      await transport.close().catchError((Object _) {});
-      await server.stop();
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    await transport.close().catchError((Object _) {});
+    await server.stop();
+  }, timeout: const Timeout(Duration(seconds: 90)));
 }

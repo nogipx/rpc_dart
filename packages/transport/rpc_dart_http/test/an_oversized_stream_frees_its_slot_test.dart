@@ -58,60 +58,56 @@ final class _Svc extends RpcResponderContract {
 }
 
 void main() {
-  test(
-    'WITNESS refused streams stop and the server keeps answering',
-    () async {
-      final transport = RpcHttpResponderTransport(policy: _policy);
-      final server = await shelf_io.serve(transport.handler, '127.0.0.1', 0);
-      final endpoint = RpcResponderEndpoint(transport: transport)
-        ..registerServiceContract(_Svc())
-        ..start();
-      final caller = RpcCallerEndpoint(
-        transport: RpcHttpCallerTransport(
-          baseUrl: 'http://127.0.0.1:${server.port}',
-          policy: _policy,
+  test('WITNESS refused streams stop and the server keeps answering', () async {
+    final transport = RpcHttpResponderTransport(policy: _policy);
+    final server = await shelf_io.serve(transport.handler, '127.0.0.1', 0);
+    final endpoint = RpcResponderEndpoint(transport: transport)
+      ..registerServiceContract(_Svc())
+      ..start();
+    final caller = RpcCallerEndpoint(
+      transport: RpcHttpCallerTransport(
+        baseUrl: 'http://127.0.0.1:${server.port}',
+        policy: _policy,
+      ),
+    );
+    addTearDown(() async {
+      await caller.close();
+      await endpoint.close();
+      await server.close(force: true);
+    });
+
+    for (var i = 0; i < _policy.maxActiveStreams; i++) {
+      await expectLater(
+        caller
+            .serverStream<RpcString, RpcString>(
+              serviceName: 'Svc',
+              methodName: 'forever',
+              request: ''.rpc,
+              requestCodec: _codec,
+              responseCodec: _codec,
+            )
+            .toList(),
+        throwsA(
+          isA<RpcStatusException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            RpcStatus.resourceExhausted,
+          ),
         ),
       );
-      addTearDown(() async {
-        await caller.close();
-        await endpoint.close();
-        await server.close(force: true);
-      });
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 300));
 
-      for (var i = 0; i < _policy.maxActiveStreams; i++) {
-        await expectLater(
-          caller
-              .serverStream<RpcString, RpcString>(
-                serviceName: 'Svc',
-                methodName: 'forever',
-                request: ''.rpc,
-                requestCodec: _codec,
-                responseCodec: _codec,
-              )
-              .toList(),
-          throwsA(
-            isA<RpcStatusException>().having(
-              (e) => e.statusCode,
-              'statusCode',
-              RpcStatus.resourceExhausted,
-            ),
-          ),
-        );
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-
-      expect(_running, 0, reason: 'the refused handlers must be cancelled');
-      final answer = await caller
-          .unary<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'echo',
-            request: 'still here'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          )
-          .timeout(const Duration(seconds: 10));
-      expect(answer.value, 'still here');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(_running, 0, reason: 'the refused handlers must be cancelled');
+    final answer = await caller
+        .unary<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'echo',
+          request: 'still here'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .timeout(const Duration(seconds: 10));
+    expect(answer.value, 'still here');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

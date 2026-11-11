@@ -138,172 +138,140 @@ void main() {
   //
   // Only the server stream dropped it -- its request subscription logged the
   // error and answered nothing.
-  test(
-    'serverStream: bytes to a zero-copy method are ANSWERED',
-    () async {
-      final caller = _rig();
+  test('serverStream: bytes to a zero-copy method are ANSWERED', () async {
+    final caller = _rig();
 
-      await expectLater(
-        caller
-            .serverStream<Msg, Msg>(
-              serviceName: _zeroCopyService,
-              methodName: 'server',
-              request: const Msg('hi'),
-              requestCodec: _codec,
-              responseCodec: _codec,
-            )
-            .drain<void>()
-            .timeout(const Duration(seconds: 15)),
-        _mismatch,
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
-
-  test(
-    'clientStream: bytes to a zero-copy method are ANSWERED',
-    () async {
-      final caller = _rig();
-      final requests = StreamController<Msg>();
-      final call = caller.clientStream<Msg, Msg>(
-        serviceName: _zeroCopyService,
-        methodName: 'client',
-        requestCodec: _codec,
-        responseCodec: _codec,
-        requests: requests.stream,
-      );
-      requests.add(const Msg('hi'));
-      await requests.close();
-
-      await expectLater(call.timeout(const Duration(seconds: 15)), _mismatch);
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
-
-  test(
-    'bidi: bytes to a zero-copy method are ANSWERED',
-    () async {
-      final caller = _rig();
-      final requests = StreamController<Msg>();
-      final responses = caller.bidirectionalStream<Msg, Msg>(
-        serviceName: _zeroCopyService,
-        methodName: 'bidi',
-        requests: requests.stream,
-        requestCodec: _codec,
-        responseCodec: _codec,
-      );
-      requests.add(const Msg('hi'));
-
-      await expectLater(
-        responses.drain<void>().timeout(const Duration(seconds: 15)),
-        _mismatch,
-      );
-      await requests.close();
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
-
-  test(
-    'GUARD: a matching zero-copy server stream still works',
-    () async {
-      // Pairs with the witness above: without it, a responder that refused every
-      // request stream would pass.
-      final caller = _rig();
-
-      final items = await caller
+    await expectLater(
+      caller
           .serverStream<Msg, Msg>(
             serviceName: _zeroCopyService,
             methodName: 'server',
             request: const Msg('hi'),
+            requestCodec: _codec,
+            responseCodec: _codec,
           )
-          .toList()
-          .timeout(const Duration(seconds: 15));
+          .drain<void>()
+          .timeout(const Duration(seconds: 15)),
+      _mismatch,
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
-      expect(items.map((m) => m.text).toList(), ['zc:hi']);
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+  test('clientStream: bytes to a zero-copy method are ANSWERED', () async {
+    final caller = _rig();
+    final requests = StreamController<Msg>();
+    final call = caller.clientStream<Msg, Msg>(
+      serviceName: _zeroCopyService,
+      methodName: 'client',
+      requestCodec: _codec,
+      responseCodec: _codec,
+      requests: requests.stream,
+    );
+    requests.add(const Msg('hi'));
+    await requests.close();
 
-  test(
-    'bytes to a zero-copy method are ANSWERED, not dropped',
-    () async {
-      // WITNESS. Pre-fix this produced no reply at all -- the caller waited out
-      // its own deadline with nothing to diagnose.
-      final caller = _rig();
+    await expectLater(call.timeout(const Duration(seconds: 15)), _mismatch);
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
-      await expectLater(
-        _call(
-          caller,
-          service: _zeroCopyService,
-          withCodecs: true,
-        ).timeout(const Duration(seconds: 15)),
-        throwsA(
-          isA<RpcStatusException>().having(
-            (e) => e.message,
-            'message',
-            allOf(
-              contains('Transfer-mode mismatch'),
-              contains(_zeroCopyService),
-              contains('zero-copy'),
-            ),
-          ),
-        ),
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+  test('bidi: bytes to a zero-copy method are ANSWERED', () async {
+    final caller = _rig();
+    final requests = StreamController<Msg>();
+    final responses = caller.bidirectionalStream<Msg, Msg>(
+      serviceName: _zeroCopyService,
+      methodName: 'bidi',
+      requests: requests.stream,
+      requestCodec: _codec,
+      responseCodec: _codec,
+    );
+    requests.add(const Msg('hi'));
 
-  test(
-    'GUARD: a matching zero-copy call still works',
-    () async {
-      // Without this the witness would pass on a responder that refused
-      // everything.
-      final caller = _rig();
+    await expectLater(
+      responses.drain<void>().timeout(const Duration(seconds: 15)),
+      _mismatch,
+    );
+    await requests.close();
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
-      final response = await _call(
+  test('GUARD: a matching zero-copy server stream still works', () async {
+    // Pairs with the witness above: without it, a responder that refused every
+    // request stream would pass.
+    final caller = _rig();
+
+    final items = await caller
+        .serverStream<Msg, Msg>(
+          serviceName: _zeroCopyService,
+          methodName: 'server',
+          request: const Msg('hi'),
+        )
+        .toList()
+        .timeout(const Duration(seconds: 15));
+
+    expect(items.map((m) => m.text).toList(), ['zc:hi']);
+  }, timeout: const Timeout(Duration(seconds: 30)));
+
+  test('bytes to a zero-copy method are ANSWERED, not dropped', () async {
+    // WITNESS. Pre-fix this produced no reply at all -- the caller waited out
+    // its own deadline with nothing to diagnose.
+    final caller = _rig();
+
+    await expectLater(
+      _call(
         caller,
         service: _zeroCopyService,
-        withCodecs: false,
-      ).timeout(const Duration(seconds: 15));
-
-      expect(response.text, 'zc:hi');
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
-
-  test(
-    'GUARD: the mirror direction is unaffected',
-    () async {
-      // A zero-copy CALLER against a codec-declared responder: the direct object
-      // is cast and delivered. This is the pre-170 norm and must stay working.
-      final caller = _rig();
-
-      final response = await _call(
-        caller,
-        service: _codecService,
-        withCodecs: false,
-      ).timeout(const Duration(seconds: 15));
-
-      expect(response.text, 'codec:hi');
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
-
-  test(
-    'GUARD: matching codec mode still works',
-    () async {
-      final caller = _rig();
-
-      final response = await _call(
-        caller,
-        service: _codecService,
         withCodecs: true,
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 15)),
+      throwsA(
+        isA<RpcStatusException>().having(
+          (e) => e.message,
+          'message',
+          allOf(
+            contains('Transfer-mode mismatch'),
+            contains(_zeroCopyService),
+            contains('zero-copy'),
+          ),
+        ),
+      ),
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
-      expect(response.text, 'codec:hi');
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+  test('GUARD: a matching zero-copy call still works', () async {
+    // Without this the witness would pass on a responder that refused
+    // everything.
+    final caller = _rig();
+
+    final response = await _call(
+      caller,
+      service: _zeroCopyService,
+      withCodecs: false,
+    ).timeout(const Duration(seconds: 15));
+
+    expect(response.text, 'zc:hi');
+  }, timeout: const Timeout(Duration(seconds: 30)));
+
+  test('GUARD: the mirror direction is unaffected', () async {
+    // A zero-copy CALLER against a codec-declared responder: the direct object
+    // is cast and delivered. This is the pre-170 norm and must stay working.
+    final caller = _rig();
+
+    final response = await _call(
+      caller,
+      service: _codecService,
+      withCodecs: false,
+    ).timeout(const Duration(seconds: 15));
+
+    expect(response.text, 'codec:hi');
+  }, timeout: const Timeout(Duration(seconds: 30)));
+
+  test('GUARD: matching codec mode still works', () async {
+    final caller = _rig();
+
+    final response = await _call(
+      caller,
+      service: _codecService,
+      withCodecs: true,
+    ).timeout(const Duration(seconds: 15));
+
+    expect(response.text, 'codec:hi');
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
   // Every later frame of a mismatched call would repeat the record, and the
   // peer chooses how many frames it sends.

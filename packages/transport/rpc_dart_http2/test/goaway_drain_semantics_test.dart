@@ -68,70 +68,66 @@ void main() {
 
   tearDown(() => server.stop().catchError((Object _) {}));
 
-  test(
-    'a drained stop finishes in-flight work and refuses new work',
-    () async {
-      server = RpcHttp2Server(
-        host: '127.0.0.1',
-        port: 0,
-        mode: RpcResponderMode((e) => e.registerServiceContract(_Contract())),
-      );
-      await server.start();
+  test('a drained stop finishes in-flight work and refuses new work', () async {
+    server = RpcHttp2Server(
+      host: '127.0.0.1',
+      port: 0,
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Contract())),
+    );
+    await server.start();
 
-      final transport = await RpcHttp2CallerTransport.connect(
-        host: '127.0.0.1',
-        port: server.port,
-      );
-      addTearDown(() => transport.close().catchError((Object _) {}));
-      final caller = RpcCallerEndpoint(transport: transport);
+    final transport = await RpcHttp2CallerTransport.connect(
+      host: '127.0.0.1',
+      port: server.port,
+    );
+    addTearDown(() => transport.close().catchError((Object _) {}));
+    final caller = RpcCallerEndpoint(transport: transport);
 
-      final slow = caller
-          .unary<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'Slow',
-            request: 'x'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          )
-          .then((r) => 'returned ${r.value}')
-          .catchError((Object e) => _describe(e));
+    final slow = caller
+        .unary<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'Slow',
+          request: 'x'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .then((r) => 'returned ${r.value}')
+        .catchError((Object e) => _describe(e));
 
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      final stopping = server.stop(drainTimeout: const Duration(seconds: 20));
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    final stopping = server.stop(drainTimeout: const Duration(seconds: 20));
 
-      // A call issued AFTER shutdown began, on the connection we already have.
-      await Future<void>.delayed(const Duration(milliseconds: 400));
-      final late = await caller
-          .unary<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'Quick',
-            request: 'y'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          )
-          .then((r) => 'returned ${r.value}')
-          .catchError((Object e) => _describe(e));
+    // A call issued AFTER shutdown began, on the connection we already have.
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    final late = await caller
+        .unary<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'Quick',
+          request: 'y'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .then((r) => 'returned ${r.value}')
+        .catchError((Object e) => _describe(e));
 
-      expect(
-        late,
-        isNot('returned quick-done'),
-        reason:
-            'GOAWAY is what tells the peer to stop opening streams; without it '
-            'shutdown is extended by work that arrived after it started',
-      );
+    expect(
+      late,
+      isNot('returned quick-done'),
+      reason:
+          'GOAWAY is what tells the peer to stop opening streams; without it '
+          'shutdown is extended by work that arrived after it started',
+    );
 
-      await stopping;
+    await stopping;
 
-      expect(
-        await slow.timeout(const Duration(seconds: 10)),
-        'returned slow-done',
-        reason:
-            'GOAWAY must not cut calls already running -- allowing them to '
-            'finish is the entire point of a graceful shutdown',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    expect(
+      await slow.timeout(const Duration(seconds: 10)),
+      'returned slow-done',
+      reason:
+          'GOAWAY must not cut calls already running -- allowing them to '
+          'finish is the entire point of a graceful shutdown',
+    );
+  }, timeout: const Timeout(Duration(seconds: 90)));
 
   test(
     'GUARD: an ordinary call is unaffected when nothing is shutting down',

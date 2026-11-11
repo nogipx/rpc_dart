@@ -90,30 +90,22 @@ void main() {
   }
 
   // WITNESS. Before the fix this read status=13.
-  test(
-    'grpc-encoding: Identity round trips over http2',
-    () async {
-      expect(
-        await callWith('Identity'),
-        'saw:x',
-        reason:
-            'the registry is case-insensitive, so a capitalised identity names '
-            'the same codec; treating it as compression sets the flag on bytes '
-            'nothing compressed',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('grpc-encoding: Identity round trips over http2', () async {
+    expect(
+      await callWith('Identity'),
+      'saw:x',
+      reason:
+          'the registry is case-insensitive, so a capitalised identity names '
+          'the same codec; treating it as compression sets the flag on bytes '
+          'nothing compressed',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   // CONTROL. The spelling the library itself always sends, which worked before
   // and must still. If this fails, the witness is measuring the harness.
-  test(
-    'CONTROL: grpc-encoding: identity round trips',
-    () async {
-      expect(await callWith('identity'), 'saw:x');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('CONTROL: grpc-encoding: identity round trips', () async {
+    expect(await callWith('identity'), 'saw:x');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   // THE GUARD WHOSE ABSENCE LET A REGRESSION SHIP (round 457).
   //

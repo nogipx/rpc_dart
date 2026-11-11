@@ -78,23 +78,19 @@ Future<({int accepted, String? refusal})> _dribble({
 }
 
 void main() {
-  test(
-    'WITNESS: an oversized metadata frame is refused from its header',
-    () async {
-      final out = await _dribble(metadata: true);
+  test('WITNESS: an oversized metadata frame is refused from its header', () async {
+    final out = await _dribble(metadata: true);
 
-      expect(
-        out.accepted,
-        RpcChannelFrame.headerSize,
-        reason:
-            'the flag and the declared length are both header fields, so nothing '
-            'had to be buffered; checking the limit below the completeness check '
-            'held all 10 MiB first — 160x the 64 KiB ceiling',
-      );
-      expect(out.refusal, contains('metadata frame too large'));
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      out.accepted,
+      RpcChannelFrame.headerSize,
+      reason:
+          'the flag and the declared length are both header fields, so nothing '
+          'had to be buffered; checking the limit below the completeness check '
+          'held all 10 MiB first — 160x the 64 KiB ceiling',
+    );
+    expect(out.refusal, contains('metadata frame too large'));
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   test(
     'GUARD: a data frame of the same size is still accepted in full',
@@ -111,35 +107,28 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
-  test(
-    'GUARD: a metadata frame within the limit still decodes',
-    () async {
-      // Moving a limit check earlier is one edit from moving it to where it refuses
-      // everything. This drives a real, legal metadata frame all the way through.
-      final pipe = RawPeerChannel();
-      final channel = RpcFrameMultiplexedChannel(
-        isClient: false,
-        channel: pipe,
-      );
-      addTearDown(() async {
-        await pipe.close();
-        await channel.close();
-      });
+  test('GUARD: a metadata frame within the limit still decodes', () async {
+    // Moving a limit check earlier is one edit from moving it to where it refuses
+    // everything. This drives a real, legal metadata frame all the way through.
+    final pipe = RawPeerChannel();
+    final channel = RpcFrameMultiplexedChannel(isClient: false, channel: pipe);
+    addTearDown(() async {
+      await pipe.close();
+      await channel.close();
+    });
 
-      final received = <RpcTransportMessage>[];
-      channel.incoming.listen(received.add);
+    final received = <RpcTransportMessage>[];
+    channel.incoming.listen(received.add);
 
-      pipe.feed(
-        RpcChannelFrame.encodeMetadata(
-          streamId: 7,
-          metadata: RpcMetadata.forClientRequest('Svc', 'method'),
-        ),
-      );
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+    pipe.feed(
+      RpcChannelFrame.encodeMetadata(
+        streamId: 7,
+        metadata: RpcMetadata.forClientRequest('Svc', 'method'),
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      expect(received, hasLength(1));
-      expect(received.single.metadata?.methodPath, '/Svc/method');
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(received, hasLength(1));
+    expect(received.single.metadata?.methodPath, '/Svc/method');
+  }, timeout: const Timeout(Duration(seconds: 30)));
 }

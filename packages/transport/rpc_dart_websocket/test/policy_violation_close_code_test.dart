@@ -123,100 +123,84 @@ Future<int?> _closeCodeFor(int port, Uint8List bytes) async {
 }
 
 void main() {
-  test(
-    'WITNESS: a metadata policy violation is not retryable',
-    () async {
-      final port = await _startServer(StreamController<WebSocketChannel>());
+  test('WITNESS: a metadata policy violation is not retryable', () async {
+    final port = await _startServer(StreamController<WebSocketChannel>());
 
-      expect(
-        await _closeCodeFor(port, _policyViolatingFrame()),
-        4400,
-        reason:
-            'the peer was told 1005, which maps to UNAVAILABLE and is retried, '
-            'so it will send the same rejected header again',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      await _closeCodeFor(port, _policyViolatingFrame()),
+      4400,
+      reason:
+          'the peer was told 1005, which maps to UNAVAILABLE and is retried, '
+          'so it will send the same rejected header again',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD: a framing violation still closes 4400',
-    () async {
-      // The path this one was aligned WITH must not move.
-      final port = await _startServer(StreamController<WebSocketChannel>());
+  test('GUARD: a framing violation still closes 4400', () async {
+    // The path this one was aligned WITH must not move.
+    final port = await _startServer(StreamController<WebSocketChannel>());
 
-      // Metadata whose path length runs past the frame. Not an oversized
-      // frame length: that is a size, and closes with its own code.
-      final malformed = _frame(3, 0x02, [10, 0x2F]);
+    // Metadata whose path length runs past the frame. Not an oversized
+    // frame length: that is a size, and closes with its own code.
+    final malformed = _frame(3, 0x02, [10, 0x2F]);
 
-      expect(await _closeCodeFor(port, malformed), 4400);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(await _closeCodeFor(port, malformed), 4400);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD: the server keeps serving after refusing a peer',
-    () async {
-      // Closing the offending connection must not take the server with it.
-      final connCtl = StreamController<WebSocketChannel>();
-      final port = await _startServer(connCtl);
+  test('GUARD: the server keeps serving after refusing a peer', () async {
+    // Closing the offending connection must not take the server with it.
+    final connCtl = StreamController<WebSocketChannel>();
+    final port = await _startServer(connCtl);
 
-      expect(await _closeCodeFor(port, _policyViolatingFrame()), 4400);
+    expect(await _closeCodeFor(port, _policyViolatingFrame()), 4400);
 
-      final client = await RpcWebSocketCallerTransport.connect(
-        Uri.parse('ws://127.0.0.1:$port'),
-      );
-      final caller = RpcCallerEndpoint(transport: client);
-      addTearDown(caller.close);
-      final response = await caller
-          .unary<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'echo',
-            request: 'after'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          )
-          .timeout(const Duration(seconds: 10));
-      expect(response.value, 'after');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    final client = await RpcWebSocketCallerTransport.connect(
+      Uri.parse('ws://127.0.0.1:$port'),
+    );
+    final caller = RpcCallerEndpoint(transport: client);
+    addTearDown(caller.close);
+    final response = await caller
+        .unary<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'echo',
+          request: 'after'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .timeout(const Duration(seconds: 10));
+    expect(response.value, 'after');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD: a VALID header is not treated as a violation',
-    () async {
-      // Load-bearing, and the reason the fixture above is built rather than
-      // typed: with a printable value the server must NOT close, so a witness
-      // written around a mistyped fixture would pass while proving nothing.
-      final port = await _startServer(StreamController<WebSocketChannel>());
+  test('GUARD: a VALID header is not treated as a violation', () async {
+    // Load-bearing, and the reason the fixture above is built rather than
+    // typed: with a printable value the server must NOT close, so a witness
+    // written around a mistyped fixture would pass while proving nothing.
+    final port = await _startServer(StreamController<WebSocketChannel>());
 
-      final valid = _metadataFrame('x-ok', 'printable-ascii');
+    final valid = _metadataFrame('x-ok', 'printable-ascii');
 
-      final ws = await WebSocket.connect('ws://127.0.0.1:$port');
-      final closed = Completer<void>();
-      ws.listen(
-        (_) {},
-        onError: (Object _) {},
-        onDone: () {
-          if (!closed.isCompleted) closed.complete();
-        },
-      );
-      ws.add(RpcChannelFrame.preface);
-      ws.add(valid);
+    final ws = await WebSocket.connect('ws://127.0.0.1:$port');
+    final closed = Completer<void>();
+    ws.listen(
+      (_) {},
+      onError: (Object _) {},
+      onDone: () {
+        if (!closed.isCompleted) closed.complete();
+      },
+    );
+    ws.add(RpcChannelFrame.preface);
+    ws.add(valid);
 
-      var wasClosed = true;
-      await closed.future.timeout(
-        const Duration(seconds: 2),
-        onTimeout: () => wasClosed = false,
-      );
-      await ws.close();
+    var wasClosed = true;
+    await closed.future.timeout(
+      const Duration(seconds: 2),
+      onTimeout: () => wasClosed = false,
+    );
+    await ws.close();
 
-      expect(
-        wasClosed,
-        isFalse,
-        reason: 'a printable-ASCII header value must not close the connection',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      wasClosed,
+      isFalse,
+      reason: 'a printable-ASCII header value must not close the connection',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

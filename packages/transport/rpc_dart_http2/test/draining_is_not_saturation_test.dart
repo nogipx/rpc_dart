@@ -150,39 +150,35 @@ void main() {
     timeout: const Timeout(Duration(seconds: 90)),
   );
 
-  test(
-    'GUARD: a healthy connection is unaffected',
-    () async {
-      // The GOAWAY flag must not fire on ordinary traffic, or every call would
-      // be told to reconnect.
-      server = RpcHttp2Server(
-        host: '127.0.0.1',
-        port: 0,
-        mode: RpcResponderMode((e) => e.registerServiceContract(_Contract())),
-      );
-      await server.start();
+  test('GUARD: a healthy connection is unaffected', () async {
+    // The GOAWAY flag must not fire on ordinary traffic, or every call would
+    // be told to reconnect.
+    server = RpcHttp2Server(
+      host: '127.0.0.1',
+      port: 0,
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Contract())),
+    );
+    await server.start();
 
-      final transport = await RpcHttp2CallerTransport.connect(
-        host: '127.0.0.1',
-        port: server.port,
-      );
-      addTearDown(() => transport.close().catchError((Object _) {}));
-      final caller = RpcCallerEndpoint(transport: transport);
+    final transport = await RpcHttp2CallerTransport.connect(
+      host: '127.0.0.1',
+      port: server.port,
+    );
+    addTearDown(() => transport.close().catchError((Object _) {}));
+    final caller = RpcCallerEndpoint(transport: transport);
 
-      for (var i = 0; i < 4; i++) {
-        final r = await caller
-            .unary<RpcString, RpcString>(
-              serviceName: 'Svc',
-              methodName: 'Quick',
-              request: '$i'.rpc,
-              requestCodec: _codec,
-              responseCodec: _codec,
-            )
-            .timeout(const Duration(seconds: 8));
-        expect(r.value, 'quick-done');
-      }
-      expect((await transport.health()).message, contains('ready'));
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    for (var i = 0; i < 4; i++) {
+      final r = await caller
+          .unary<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: 'Quick',
+            request: '$i'.rpc,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .timeout(const Duration(seconds: 8));
+      expect(r.value, 'quick-done');
+    }
+    expect((await transport.health()).message, contains('ready'));
+  }, timeout: const Timeout(Duration(seconds: 90)));
 }

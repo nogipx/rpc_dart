@@ -98,196 +98,186 @@ final class _Svc extends RpcResponderContract {
 }
 
 void main() {
-  test(
-    'a hostile peer cannot stop a server answering',
-    () async {
-      final rnd = Random(11);
-      final zone = <Object>[];
-      await runZonedGuarded(() async {
-        for (var session = 0; session < 40; session++) {
-          final chan = RawPeerChannel(throwOnSendAfterClose: true);
-          final transport = RpcChannelTransport.fromChannel(
-            channel: chan,
-            isClient: false,
-            policy: const RpcSecurityPolicy(
-              halfOpenStreamTimeout: Duration(milliseconds: 200),
-            ),
-          );
-          final responder = RpcResponderEndpoint(transport: transport)
-            ..registerServiceContract(_Svc())
-            ..start();
-          const methods = ['u', 'c', 's', 'b', 'nope'];
-          for (var i = 0; i < 30; i++) {
-            final id = [1, 3, 5, 7, 0x7fffffff][rnd.nextInt(5)];
-            final frame = switch (rnd.nextInt(5)) {
-              0 || 1 => RpcChannelFrame.encodeMetadata(
-                streamId: id,
-                metadata: RpcMetadata.forClientRequest(
-                  'Svc',
-                  methods[rnd.nextInt(methods.length)],
-                ),
-                endOfStream: rnd.nextInt(6) == 0,
-              ),
-              2 || 3 => RpcChannelFrame.encodeData(
-                streamId: id,
-                payload: switch (rnd.nextInt(4)) {
-                  0 => Uint8List(0),
-                  1 => Uint8List.fromList(
-                    List.generate(rnd.nextInt(10), (_) => rnd.nextInt(256)),
-                  ),
-                  2 => Uint8List.sublistView(
-                    RpcMessageFrame.encode(_codec.serialize('hello'.rpc)),
-                    0,
-                    5,
-                  ),
-                  _ => RpcMessageFrame.encode(_codec.serialize('ok'.rpc)),
-                },
-                endOfStream: rnd.nextInt(3) == 0,
-              ),
-              _ => RpcChannelFrame.encodeEndOfStream(id),
-            };
-            chan.feed(frame);
-            if (i % 5 == 4) await Future<void>.delayed(Duration.zero);
-          }
-          await Future<void>.delayed(const Duration(milliseconds: 30));
-
-          const probe = 1001;
-          final before = chan.sent.length;
-          chan
-            ..feed(
-              RpcChannelFrame.encodeMetadata(
-                streamId: probe,
-                metadata: RpcMetadata.forClientRequest('Svc', 'u'),
-              ),
-            )
-            ..feed(
-              RpcChannelFrame.encodeData(
-                streamId: probe,
-                payload: RpcMessageFrame.encode(_codec.serialize('ping'.rpc)),
-                endOfStream: true,
-              ),
-            );
-          String? status;
-          for (var w = 0; w < 100 && status == null && !chan.isClosed; w++) {
-            await Future<void>.delayed(const Duration(milliseconds: 10));
-            for (final f in chan.sent.skip(before)) {
-              final d = RpcChannelFrame.decode(f);
-              if (d?.streamId == probe) {
-                status ??= d?.metadata?.getHeaderValue(RpcHeaders.grpcStatus);
-              }
-            }
-          }
-          expect(
-            status == '0' || chan.isClosed,
-            isTrue,
-            reason: 'session $session: the valid call got $status',
-          );
-          await responder.close();
-          await transport.close();
-          expect(responder.activeResponderCount, 0, reason: 'session $session');
-        }
-      }, (e, _) => zone.add(e));
-      expect(zone, isEmpty);
-    },
-    timeout: const Timeout(Duration(minutes: 2)),
-  );
-
-  test(
-    'chaotic calls each settle once and leave nothing behind',
-    () async {
-      final rnd = Random(12);
-      final zone = <Object>[];
-      await runZonedGuarded(() async {
-        final (client, server) = RpcChannelTransport.pair();
-        final responder = RpcResponderEndpoint(transport: server)
+  test('a hostile peer cannot stop a server answering', () async {
+    final rnd = Random(11);
+    final zone = <Object>[];
+    await runZonedGuarded(() async {
+      for (var session = 0; session < 40; session++) {
+        final chan = RawPeerChannel(throwOnSendAfterClose: true);
+        final transport = RpcChannelTransport.fromChannel(
+          channel: chan,
+          isClient: false,
+          policy: const RpcSecurityPolicy(
+            halfOpenStreamTimeout: Duration(milliseconds: 200),
+          ),
+        );
+        final responder = RpcResponderEndpoint(transport: transport)
           ..registerServiceContract(_Svc())
           ..start();
-        final caller = RpcCallerEndpoint(transport: client);
-        const kinds = [
-          'ok',
-          'ok',
-          'delay',
-          'throw',
-          'status',
-          'flood',
-          'deaf',
-          'partial',
-        ];
-        final settled = List.filled(150, 0);
-        final calls = <Future<void>>[];
-        for (var i = 0; i < 150; i++) {
-          final kind = kinds[rnd.nextInt(kinds.length)];
-          final token = RpcCancellationToken();
-          var ctx = RpcContext.empty().withCancellation(token);
-          if (rnd.nextInt(3) == 0) {
-            ctx = ctx.withTimeout(
-              Duration(milliseconds: 10 + rnd.nextInt(100)),
-            );
-          }
-          if (rnd.nextInt(5) == 0) {
-            Timer(Duration(milliseconds: rnd.nextInt(60)), token.cancel);
-          }
-          Stream<RpcString> requests() =>
-              Stream.fromIterable(List.filled(1 + rnd.nextInt(5), kind.rpc));
-          final Future<Object?> call = switch (i % 4) {
-            0 => caller.unary<RpcString, RpcString>(
-              serviceName: 'Svc',
-              methodName: 'u',
-              request: kind.rpc,
-              requestCodec: _codec,
-              responseCodec: _codec,
-              context: ctx,
+        const methods = ['u', 'c', 's', 'b', 'nope'];
+        for (var i = 0; i < 30; i++) {
+          final id = [1, 3, 5, 7, 0x7fffffff][rnd.nextInt(5)];
+          final frame = switch (rnd.nextInt(5)) {
+            0 || 1 => RpcChannelFrame.encodeMetadata(
+              streamId: id,
+              metadata: RpcMetadata.forClientRequest(
+                'Svc',
+                methods[rnd.nextInt(methods.length)],
+              ),
+              endOfStream: rnd.nextInt(6) == 0,
             ),
-            1 => caller.clientStream<RpcString, RpcString>(
-              serviceName: 'Svc',
-              methodName: 'c',
-              requestCodec: _codec,
-              responseCodec: _codec,
-              context: ctx,
-              requests: requests(),
+            2 || 3 => RpcChannelFrame.encodeData(
+              streamId: id,
+              payload: switch (rnd.nextInt(4)) {
+                0 => Uint8List(0),
+                1 => Uint8List.fromList(
+                  List.generate(rnd.nextInt(10), (_) => rnd.nextInt(256)),
+                ),
+                2 => Uint8List.sublistView(
+                  RpcMessageFrame.encode(_codec.serialize('hello'.rpc)),
+                  0,
+                  5,
+                ),
+                _ => RpcMessageFrame.encode(_codec.serialize('ok'.rpc)),
+              },
+              endOfStream: rnd.nextInt(3) == 0,
             ),
-            2 =>
-              caller
-                  .serverStream<RpcString, RpcString>(
-                    serviceName: 'Svc',
-                    methodName: 's',
-                    request: kind.rpc,
-                    requestCodec: _codec,
-                    responseCodec: _codec,
-                    context: ctx,
-                  )
-                  .take(rnd.nextInt(6))
-                  .toList(),
-            _ =>
-              caller
-                  .bidirectionalStream<RpcString, RpcString>(
-                    serviceName: 'Svc',
-                    methodName: 'b',
-                    requests: requests(),
-                    requestCodec: _codec,
-                    responseCodec: _codec,
-                    context: ctx,
-                  )
-                  .toList(),
+            _ => RpcChannelFrame.encodeEndOfStream(id),
           };
-          calls.add(
-            call
-                .then((_) {}, onError: (Object _) {})
-                .whenComplete(() => settled[i]++)
-                .timeout(const Duration(seconds: 10)),
+          chan.feed(frame);
+          if (i % 5 == 4) await Future<void>.delayed(Duration.zero);
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+
+        const probe = 1001;
+        final before = chan.sent.length;
+        chan
+          ..feed(
+            RpcChannelFrame.encodeMetadata(
+              streamId: probe,
+              metadata: RpcMetadata.forClientRequest('Svc', 'u'),
+            ),
+          )
+          ..feed(
+            RpcChannelFrame.encodeData(
+              streamId: probe,
+              payload: RpcMessageFrame.encode(_codec.serialize('ping'.rpc)),
+              endOfStream: true,
+            ),
           );
+        String? status;
+        for (var w = 0; w < 100 && status == null && !chan.isClosed; w++) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          for (final f in chan.sent.skip(before)) {
+            final d = RpcChannelFrame.decode(f);
+            if (d?.streamId == probe) {
+              status ??= d?.metadata?.getHeaderValue(RpcHeaders.grpcStatus);
+            }
+          }
         }
-        await Future.wait(calls);
-        expect(settled.where((n) => n != 1), isEmpty);
-        for (var i = 0; i < 50 && responder.activeResponderCount > 0; i++) {
-          await Future<void>.delayed(const Duration(milliseconds: 50));
-        }
-        expect(responder.activeResponderCount, 0);
-        await caller.close();
+        expect(
+          status == '0' || chan.isClosed,
+          isTrue,
+          reason: 'session $session: the valid call got $status',
+        );
         await responder.close();
-      }, (e, _) => zone.add(e));
-      expect(zone, isEmpty);
-    },
-    timeout: const Timeout(Duration(minutes: 2)),
-  );
+        await transport.close();
+        expect(responder.activeResponderCount, 0, reason: 'session $session');
+      }
+    }, (e, _) => zone.add(e));
+    expect(zone, isEmpty);
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  test('chaotic calls each settle once and leave nothing behind', () async {
+    final rnd = Random(12);
+    final zone = <Object>[];
+    await runZonedGuarded(() async {
+      final (client, server) = RpcChannelTransport.pair();
+      final responder = RpcResponderEndpoint(transport: server)
+        ..registerServiceContract(_Svc())
+        ..start();
+      final caller = RpcCallerEndpoint(transport: client);
+      const kinds = [
+        'ok',
+        'ok',
+        'delay',
+        'throw',
+        'status',
+        'flood',
+        'deaf',
+        'partial',
+      ];
+      final settled = List.filled(150, 0);
+      final calls = <Future<void>>[];
+      for (var i = 0; i < 150; i++) {
+        final kind = kinds[rnd.nextInt(kinds.length)];
+        final token = RpcCancellationToken();
+        var ctx = RpcContext.empty().withCancellation(token);
+        if (rnd.nextInt(3) == 0) {
+          ctx = ctx.withTimeout(Duration(milliseconds: 10 + rnd.nextInt(100)));
+        }
+        if (rnd.nextInt(5) == 0) {
+          Timer(Duration(milliseconds: rnd.nextInt(60)), token.cancel);
+        }
+        Stream<RpcString> requests() =>
+            Stream.fromIterable(List.filled(1 + rnd.nextInt(5), kind.rpc));
+        final Future<Object?> call = switch (i % 4) {
+          0 => caller.unary<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: 'u',
+            request: kind.rpc,
+            requestCodec: _codec,
+            responseCodec: _codec,
+            context: ctx,
+          ),
+          1 => caller.clientStream<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: 'c',
+            requestCodec: _codec,
+            responseCodec: _codec,
+            context: ctx,
+            requests: requests(),
+          ),
+          2 =>
+            caller
+                .serverStream<RpcString, RpcString>(
+                  serviceName: 'Svc',
+                  methodName: 's',
+                  request: kind.rpc,
+                  requestCodec: _codec,
+                  responseCodec: _codec,
+                  context: ctx,
+                )
+                .take(rnd.nextInt(6))
+                .toList(),
+          _ =>
+            caller
+                .bidirectionalStream<RpcString, RpcString>(
+                  serviceName: 'Svc',
+                  methodName: 'b',
+                  requests: requests(),
+                  requestCodec: _codec,
+                  responseCodec: _codec,
+                  context: ctx,
+                )
+                .toList(),
+        };
+        calls.add(
+          call
+              .then((_) {}, onError: (Object _) {})
+              .whenComplete(() => settled[i]++)
+              .timeout(const Duration(seconds: 10)),
+        );
+      }
+      await Future.wait(calls);
+      expect(settled.where((n) => n != 1), isEmpty);
+      for (var i = 0; i < 50 && responder.activeResponderCount > 0; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      expect(responder.activeResponderCount, 0);
+      await caller.close();
+      await responder.close();
+    }, (e, _) => zone.add(e));
+    expect(zone, isEmpty);
+  }, timeout: const Timeout(Duration(minutes: 2)));
 }

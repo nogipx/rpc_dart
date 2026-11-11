@@ -19,31 +19,27 @@ import 'package:test/test.dart';
 void _unusedEntrypoint(IRpcTransport transport, Map<String, dynamic> params) {}
 
 void main() {
-  test(
-    'the worker holds the host\'s connection window',
-    () async {
-      final spawned = await RpcIsolateTransport.spawn(
-        entrypoint: _unusedEntrypoint,
-        workerUri: Uri.base.resolve('echo_worker.dart.js'),
-      );
-      final caller = RpcCallerEndpoint(transport: spawned.transport);
-      addTearDown(() async {
-        await caller.close();
-        spawned.kill();
-      });
+  test('the worker holds the host\'s connection window', () async {
+    final spawned = await RpcIsolateTransport.spawn(
+      entrypoint: _unusedEntrypoint,
+      workerUri: Uri.base.resolve('echo_worker.dart.js'),
+    );
+    final caller = RpcCallerEndpoint(transport: spawned.transport);
+    addTearDown(() async {
+      await caller.close();
+      spawned.kill();
+    });
 
-      final credit = await caller
-          .unary<RpcString, RpcString>(
-            serviceName: 'EchoService',
-            methodName: 'Credit',
-            requestCodec: RpcString.codec,
-            responseCodec: RpcString.codec,
-            request: ''.rpc,
-          )
-          .timeout(const Duration(seconds: 15));
+    final credit = await caller
+        .unary<RpcString, RpcString>(
+          serviceName: 'EchoService',
+          methodName: 'Credit',
+          requestCodec: RpcString.codec,
+          responseCodec: RpcString.codec,
+          request: ''.rpc,
+        )
+        .timeout(const Duration(seconds: 15));
 
-      expect(credit.value, isNot('null'));
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(credit.value, isNot('null'));
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

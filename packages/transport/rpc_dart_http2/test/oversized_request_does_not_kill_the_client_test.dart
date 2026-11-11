@@ -111,67 +111,59 @@ Future<void> main() async {
 ''';
 
 void main() {
-  test(
-    'a refused oversized request does not kill the client isolate',
-    () async {
-      // WITNESS. Pre-fix the child died with an unhandled RpcStatusException(8)
-      // and a non-zero exit code; nothing it printed reached "SURVIVED".
-      final dir = Directory('${Directory.current.path}/.dart_tool/probe')
-        ..createSync(recursive: true);
-      File(
-        '${dir.path}/oversized_client.dart',
-      ).writeAsStringSync(_clientSource);
-      File(
-        '${dir.path}/oversized_server.dart',
-      ).writeAsStringSync(_serverSource);
+  test('a refused oversized request does not kill the client isolate', () async {
+    // WITNESS. Pre-fix the child died with an unhandled RpcStatusException(8)
+    // and a non-zero exit code; nothing it printed reached "SURVIVED".
+    final dir = Directory('${Directory.current.path}/.dart_tool/probe')
+      ..createSync(recursive: true);
+    File('${dir.path}/oversized_client.dart').writeAsStringSync(_clientSource);
+    File('${dir.path}/oversized_server.dart').writeAsStringSync(_serverSource);
 
-      final server = await Process.start(Platform.resolvedExecutable, [
-        'run',
-        '${dir.path}/oversized_server.dart',
-      ]);
-      addTearDown(() => server.kill(ProcessSignal.sigkill));
+    final server = await Process.start(Platform.resolvedExecutable, [
+      'run',
+      '${dir.path}/oversized_server.dart',
+    ]);
+    addTearDown(() => server.kill(ProcessSignal.sigkill));
 
-      final portLine = await server.stdout
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())
-          .firstWhere((l) => l.startsWith('PORT '))
-          .timeout(const Duration(seconds: 60));
-      final port = portLine.substring(5).trim();
+    final portLine = await server.stdout
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .firstWhere((l) => l.startsWith('PORT '))
+        .timeout(const Duration(seconds: 60));
+    final port = portLine.substring(5).trim();
 
-      final client = await Process.run(Platform.resolvedExecutable, [
-        'run',
-        '${dir.path}/oversized_client.dart',
-        port,
-      ]).timeout(const Duration(seconds: 90));
+    final client = await Process.run(Platform.resolvedExecutable, [
+      'run',
+      '${dir.path}/oversized_client.dart',
+      port,
+    ]).timeout(const Duration(seconds: 90));
 
-      expect(
-        client.stderr.toString(),
-        isNot(contains('Unhandled exception')),
-        reason: 'the client isolate must survive a refused request',
-      );
-      expect(
-        client.stdout.toString(),
-        contains('SURVIVED'),
-        reason: 'the client must reach the end of main()',
-      );
-      expect(client.exitCode, 0);
+    expect(
+      client.stderr.toString(),
+      isNot(contains('Unhandled exception')),
+      reason: 'the client isolate must survive a refused request',
+    );
+    expect(
+      client.stdout.toString(),
+      contains('SURVIVED'),
+      reason: 'the client must reach the end of main()',
+    );
+    expect(client.exitCode, 0);
 
-      // The SERVER's answer, not a local deadline. Once the crash was gone the
-      // call still hung: `call()` was inside `await sendMessage` when the
-      // trailer arrived, so the wait was gated on a send the peer had stopped
-      // reading, and `RpcContext.empty().withTimeout(5s)` never applied. Measured
-      // through the probe: still running at 15 s -> RpcStatusException(8) in
-      // 19 ms.
-      expect(
-        client.stdout.toString(),
-        contains(
-          'CAUGHT RpcStatusException status=${RpcStatus.resourceExhausted.code}',
-        ),
-        reason:
-            'the refusal is already on the stream; the call must read it '
-            'rather than wait for a send the peer will never drain',
-      );
-    },
-    timeout: const Timeout(Duration(minutes: 4)),
-  );
+    // The SERVER's answer, not a local deadline. Once the crash was gone the
+    // call still hung: `call()` was inside `await sendMessage` when the
+    // trailer arrived, so the wait was gated on a send the peer had stopped
+    // reading, and `RpcContext.empty().withTimeout(5s)` never applied. Measured
+    // through the probe: still running at 15 s -> RpcStatusException(8) in
+    // 19 ms.
+    expect(
+      client.stdout.toString(),
+      contains(
+        'CAUGHT RpcStatusException status=${RpcStatus.resourceExhausted.code}',
+      ),
+      reason:
+          'the refusal is already on the stream; the call must read it '
+          'rather than wait for a send the peer will never drain',
+    );
+  }, timeout: const Timeout(Duration(minutes: 4)));
 }

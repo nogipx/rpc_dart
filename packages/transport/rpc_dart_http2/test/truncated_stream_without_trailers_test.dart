@@ -222,40 +222,32 @@ void main() {
   //   [transport] payload=false end=true grpc-status=-    <- closes it
   //   [transport] payload=false end=true grpc-status=14   <- too late
   //   consumer: CLEAN END after 2 item(s), no error raised
-  test(
-    'trailers that end the stream without a status are an error too',
-    () async {
-      final listener = await _rawServer(ending: _Ending.trailersWithoutStatus);
-      addTearDown(() => listener.close());
+  test('trailers that end the stream without a status are an error too', () async {
+    final listener = await _rawServer(ending: _Ending.trailersWithoutStatus);
+    addTearDown(() => listener.close());
 
-      expect(
-        await _drain(listener.port),
-        // INTERNAL since round 571, and the VALUE is the point rather than an
-        // incidental: this peer is alive and forgot its trailers, so the work may
-        // have run and the call must not be retried. A connection that DIED still
-        // reads UNAVAILABLE -- see graceful_drain_on_stop_test, which requires it.
-        'status ${RpcStatus.internal.code} after 2',
-        reason:
-            'a trailers frame with no grpc-status ends the stream without ever '
-            'saying how it went, so a clean end is the same silent data loss '
-            'the DATA path was guarded against',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      await _drain(listener.port),
+      // INTERNAL since round 571, and the VALUE is the point rather than an
+      // incidental: this peer is alive and forgot its trailers, so the work may
+      // have run and the call must not be retried. A connection that DIED still
+      // reads UNAVAILABLE -- see graceful_drain_on_stop_test, which requires it.
+      'status ${RpcStatus.internal.code} after 2',
+      reason:
+          'a trailers frame with no grpc-status ends the stream without ever '
+          'saying how it went, so a clean end is the same silent data loss '
+          'the DATA path was guarded against',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD: a conforming stream with trailers still ends cleanly',
-    () async {
-      // The load-bearing guard, and it covers BOTH witnesses: end-of-stream now
-      // waits for a status on the data path and on the headers path, so a
-      // well-formed response must still terminate -- otherwise every server
-      // stream would hang.
-      final listener = await _rawServer(ending: _Ending.trailersWithStatus);
-      addTearDown(() => listener.close());
+  test('GUARD: a conforming stream with trailers still ends cleanly', () async {
+    // The load-bearing guard, and it covers BOTH witnesses: end-of-stream now
+    // waits for a status on the data path and on the headers path, so a
+    // well-formed response must still terminate -- otherwise every server
+    // stream would hang.
+    final listener = await _rawServer(ending: _Ending.trailersWithStatus);
+    addTearDown(() => listener.close());
 
-      expect(await _drain(listener.port), 'clean end after 2');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(await _drain(listener.port), 'clean end after 2');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

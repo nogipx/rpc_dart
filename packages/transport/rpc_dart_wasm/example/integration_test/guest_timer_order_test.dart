@@ -25,40 +25,36 @@ const _codec = RpcCodec(RpcString.fromJson);
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets(
-    'guest timers due together fire in deadline order',
-    (_) async {
-      final wasm = (await rootBundle.load(
-        'assets/guest.wasm',
-      )).buffer.asUint8List();
-      final mjs = await rootBundle.loadString('assets/guest.mjs');
-      final bridge = await RpcFlutterWasmBridge.load(
-        wasmBytes: wasm,
-        mjsCode: mjs,
-      ).timeout(const Duration(seconds: 60));
-      final caller = RpcCallerEndpoint(
-        transport: RpcWasmTransport.fromBridge(bridge: bridge, isClient: true),
-      );
+  testWidgets('guest timers due together fire in deadline order', (_) async {
+    final wasm = (await rootBundle.load(
+      'assets/guest.wasm',
+    )).buffer.asUint8List();
+    final mjs = await rootBundle.loadString('assets/guest.mjs');
+    final bridge = await RpcFlutterWasmBridge.load(
+      wasmBytes: wasm,
+      mjsCode: mjs,
+    ).timeout(const Duration(seconds: 60));
+    final caller = RpcCallerEndpoint(
+      transport: RpcWasmTransport.fromBridge(bridge: bridge, isClient: true),
+    );
 
-      final order =
-          (await caller
-                  .unary<RpcString, RpcString>(
-                    serviceName: 'Echo',
-                    methodName: 'TimerOrder',
-                    request: ''.rpc,
-                    requestCodec: _codec,
-                    responseCodec: _codec,
-                  )
-                  .timeout(const Duration(seconds: 30)))
-              .value;
-      // ignore: avoid_print
-      print('platform: ${Platform.operatingSystem}  order: $order');
+    final order =
+        (await caller
+                .unary<RpcString, RpcString>(
+                  serviceName: 'Echo',
+                  methodName: 'TimerOrder',
+                  request: ''.rpc,
+                  requestCodec: _codec,
+                  responseCodec: _codec,
+                )
+                .timeout(const Duration(seconds: 30)))
+            .value;
+    // ignore: avoid_print
+    print('platform: ${Platform.operatingSystem}  order: $order');
 
-      expect(order, 'early,micro,same,late');
+    expect(order, 'early,micro,same,late');
 
-      await caller.close();
-      await bridge.close();
-    },
-    timeout: const Timeout(Duration(minutes: 2)),
-  );
+    await caller.close();
+    await bridge.close();
+  }, timeout: const Timeout(Duration(minutes: 2)));
 }

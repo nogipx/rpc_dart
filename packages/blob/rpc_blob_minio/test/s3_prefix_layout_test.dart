@@ -320,23 +320,19 @@ void main() {
   });
 
   group('collectionSize', () {
-    test(
-      'is null — a prefix cannot be sized without enumerating it',
-      () async {
-        if (skipReason != null) return;
-        final repo = makeRepo();
-        await write(repo, 'sized', 'a', 'hello');
+    test('is null — a prefix cannot be sized without enumerating it', () async {
+      if (skipReason != null) return;
+      final repo = makeRepo();
+      await write(repo, 'sized', 'a', 'hello');
 
-        expect(await repo.collectionSize('sized'), isNull);
+      expect(await repo.collectionSize('sized'), isNull);
 
-        // The documented replacement: sum the listing, in the open.
-        final listed = await repo.listBlobs(
-          const ListBlobsRequest(collection: 'sized', limit: 1000),
-        );
-        expect(listed.items.fold<int>(0, (sum, d) => sum + d.length), 5);
-      },
-      skip: skipReason,
-    );
+      // The documented replacement: sum the listing, in the open.
+      final listed = await repo.listBlobs(
+        const ListBlobsRequest(collection: 'sized', limit: 1000),
+      );
+      expect(listed.items.fold<int>(0, (sum, d) => sum + d.length), 5);
+    }, skip: skipReason);
   });
 
   group('write path', () {

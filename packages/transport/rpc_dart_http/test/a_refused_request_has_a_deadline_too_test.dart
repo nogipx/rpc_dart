@@ -127,59 +127,47 @@ Future<List<String>> _settleAll(List<Future<String>> attacks) => Future.wait(
 );
 
 void main() {
-  test(
-    'a refused request is bounded by bodyReadTimeout too',
-    () async {
-      // WITNESS. Pre-fix all 8 read STILL DRAINING; the drain had no deadline.
-      final port = await _serve();
+  test('a refused request is bounded by bodyReadTimeout too', () async {
+    // WITNESS. Pre-fix all 8 read STILL DRAINING; the drain had no deadline.
+    final port = await _serve();
 
-      final settled = await _settleAll([
-        for (var i = 0; i < _sockets; i++) _slowBody(port, 'text/plain'),
-      ]);
+    final settled = await _settleAll([
+      for (var i = 0; i < _sockets; i++) _slowBody(port, 'text/plain'),
+    ]);
 
-      expect(
-        settled.where((s) => s == 'STILL DRAINING'),
-        isEmpty,
-        reason: 'every refused slow body must be let go inside the budget',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      settled.where((s) => s == 'STILL DRAINING'),
+      isEmpty,
+      reason: 'every refused slow body must be let go inside the budget',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD: the accepted path is still bounded, and answers 408',
-    () async {
-      // The path that always worked. Without it the witness would pass on a
-      // server that had simply stopped reading bodies at all.
-      final port = await _serve();
+  test('GUARD: the accepted path is still bounded, and answers 408', () async {
+    // The path that always worked. Without it the witness would pass on a
+    // server that had simply stopped reading bodies at all.
+    final port = await _serve();
 
-      final settled = await _settleAll([
-        for (var i = 0; i < _sockets; i++) _slowBody(port, 'application/grpc'),
-      ]);
+    final settled = await _settleAll([
+      for (var i = 0; i < _sockets; i++) _slowBody(port, 'application/grpc'),
+    ]);
 
-      expect(settled.where((s) => s == 'STILL DRAINING'), isEmpty);
-      // The 408 goes out with the request body still unread, so closing the
-      // connection may reset it before the client reads the status; under
-      // load some sockets see only the close. One 408 shows the path answers
-      // with a status rather than by hanging up.
-      expect(settled, everyElement(anyOf(contains('408'), 'closed')));
-      expect(settled, contains(contains('408')));
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(settled.where((s) => s == 'STILL DRAINING'), isEmpty);
+    // The 408 goes out with the request body still unread, so closing the
+    // connection may reset it before the client reads the status; under
+    // load some sockets see only the close. One 408 shows the path answers
+    // with a status rather than by hanging up.
+    expect(settled, everyElement(anyOf(contains('408'), 'closed')));
+    expect(settled, contains(contains('408')));
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD: a refusal inside the budget still gets its status',
-    () async {
-      // The fix must bound the SLOW refusal without turning an ordinary one into
-      // a dropped connection.
-      final port = await _serve();
+  test('GUARD: a refusal inside the budget still gets its status', () async {
+    // The fix must bound the SLOW refusal without turning an ordinary one into
+    // a dropped connection.
+    final port = await _serve();
 
-      expect(
-        await _fastBadContentType(port).timeout(const Duration(seconds: 10)),
-        contains('415'),
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      await _fastBadContentType(port).timeout(const Duration(seconds: 10)),
+      contains('415'),
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

@@ -204,25 +204,21 @@ Future<_Loud> _call(String method) async {
 
 void main() {
   group('WITNESS: an application status is not an incident', () {
-    test(
-      'NOT_FOUND produces no error or warning on either side',
-      () async {
-        final loud = await _call('missing');
-        expect(
-          loud.caller,
-          isEmpty,
-          reason:
-              'the caller logged the status AND the failure, so one ordinary '
-              'answer produced two error records',
-        );
-        expect(
-          loud.responder,
-          isEmpty,
-          reason: 'a handler answering NOT_FOUND is a working server',
-        );
-      },
-      timeout: const Timeout(Duration(seconds: 30)),
-    );
+    test('NOT_FOUND produces no error or warning on either side', () async {
+      final loud = await _call('missing');
+      expect(
+        loud.caller,
+        isEmpty,
+        reason:
+            'the caller logged the status AND the failure, so one ordinary '
+            'answer produced two error records',
+      );
+      expect(
+        loud.responder,
+        isEmpty,
+        reason: 'a handler answering NOT_FOUND is a working server',
+      );
+    }, timeout: const Timeout(Duration(seconds: 30)));
 
     test('PERMISSION_DENIED likewise', () async {
       final loud = await _call('denied');
@@ -232,30 +228,22 @@ void main() {
   });
 
   group('GUARD: a genuine fault is still reported', () {
-    test(
-      'INTERNAL reaches error on both sides',
-      () async {
-        // Without this, silencing everything would pass the witness.
-        final loud = await _call('broken');
-        // ONE caller record: the call's own, which carries the error, the
-        // method path and the stack. The trailer site logs at debug.
-        expect(loud.caller, hasLength(1), reason: '${loud.caller}');
-        expect(loud.responder, isNotEmpty);
-      },
-      timeout: const Timeout(Duration(seconds: 30)),
-    );
+    test('INTERNAL reaches error on both sides', () async {
+      // Without this, silencing everything would pass the witness.
+      final loud = await _call('broken');
+      // ONE caller record: the call's own, which carries the error, the
+      // method path and the stack. The trailer site logs at debug.
+      expect(loud.caller, hasLength(1), reason: '${loud.caller}');
+      expect(loud.responder, isNotEmpty);
+    }, timeout: const Timeout(Duration(seconds: 30)));
 
-    test(
-      'a throw with NO status reaches error on both sides',
-      () async {
-        // A crashed handler carries no status to classify, so it must be treated
-        // as a fault rather than fall through the new branch as "not a fault".
-        final loud = await _call('crash');
-        expect(loud.caller, isNotEmpty);
-        expect(loud.responder, isNotEmpty);
-      },
-      timeout: const Timeout(Duration(seconds: 30)),
-    );
+    test('a throw with NO status reaches error on both sides', () async {
+      // A crashed handler carries no status to classify, so it must be treated
+      // as a fault rather than fall through the new branch as "not a fault".
+      final loud = await _call('crash');
+      expect(loud.caller, isNotEmpty);
+      expect(loud.responder, isNotEmpty);
+    }, timeout: const Timeout(Duration(seconds: 30)));
 
     test('a successful call is silent', () async {
       final loud = await _call('ok');
@@ -266,29 +254,21 @@ void main() {
 
   group('the streaming shapes', () {
     for (final shape in ['server', 'client', 'bidi']) {
-      test(
-        'WITNESS $shape: NOT_FOUND is not an incident',
-        () async {
-          final loud = await _stream(shape, 'Missing');
-          // Both sides in one assertion, so a failure names every record.
-          expect([
-            for (final r in loud.caller) 'caller     $r',
-            for (final r in loud.responder) 'responder  $r',
-          ], isEmpty);
-        },
-        timeout: const Timeout(Duration(seconds: 30)),
-      );
+      test('WITNESS $shape: NOT_FOUND is not an incident', () async {
+        final loud = await _stream(shape, 'Missing');
+        // Both sides in one assertion, so a failure names every record.
+        expect([
+          for (final r in loud.caller) 'caller     $r',
+          for (final r in loud.responder) 'responder  $r',
+        ], isEmpty);
+      }, timeout: const Timeout(Duration(seconds: 30)));
 
-      test(
-        'GUARD $shape: INTERNAL still reaches error',
-        () async {
-          final loud = await _stream(shape, 'Broken');
-          expect(loud.responder, isNotEmpty);
-          // One caller record per failed call, as for unary.
-          expect(loud.caller, hasLength(1), reason: '${loud.caller}');
-        },
-        timeout: const Timeout(Duration(seconds: 30)),
-      );
+      test('GUARD $shape: INTERNAL still reaches error', () async {
+        final loud = await _stream(shape, 'Broken');
+        expect(loud.responder, isNotEmpty);
+        // One caller record per failed call, as for unary.
+        expect(loud.caller, hasLength(1), reason: '${loud.caller}');
+      }, timeout: const Timeout(Duration(seconds: 30)));
     }
   });
 

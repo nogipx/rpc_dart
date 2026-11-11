@@ -90,51 +90,33 @@ void main() {
 
   // WITNESS. Before the fix this was status=8: the framed body is `exact + 5`,
   // which the old check compared against `exact`.
-  test(
-    'a message at exactly maxMessageLengthBytes is accepted',
-    () async {
-      expect(
-        await call(RpcSecurityPolicy(maxMessageLengthBytes: exact), message),
-        'ok',
-        reason:
-            'the limit is in MESSAGE bytes and the body carries the 5-byte gRPC '
-            'prefix; comparing the framed length against it makes the real '
-            'ceiling max - 5',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('a message at exactly maxMessageLengthBytes is accepted', () async {
+    expect(
+      await call(RpcSecurityPolicy(maxMessageLengthBytes: exact), message),
+      'ok',
+      reason:
+          'the limit is in MESSAGE bytes and the body carries the 5-byte gRPC '
+          'prefix; comparing the framed length against it makes the real '
+          'ceiling max - 5',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   // CONTROL. With room for the prefix it always worked, so the witness is the
   // five bytes and not the message being large.
-  test(
-    'CONTROL: the same message under limit + 5 is accepted',
-    () async {
-      expect(
-        await call(
-          RpcSecurityPolicy(maxMessageLengthBytes: exact + 5),
-          message,
-        ),
-        'ok',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('CONTROL: the same message under limit + 5 is accepted', () async {
+    expect(
+      await call(RpcSecurityPolicy(maxMessageLengthBytes: exact + 5), message),
+      'ok',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   // GUARD, and load-bearing: widening a bound by five bytes is exactly the change
   // that can remove it. One byte of message over must still be refused.
-  test(
-    'GUARD: one byte over the limit is still refused',
-    () async {
-      expect(
-        await call(
-          RpcSecurityPolicy(maxMessageLengthBytes: exact - 1),
-          message,
-        ),
-        'status=${RpcStatus.resourceExhausted.code}',
-        reason: 'a bound that refuses nothing is not a bound',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('GUARD: one byte over the limit is still refused', () async {
+    expect(
+      await call(RpcSecurityPolicy(maxMessageLengthBytes: exact - 1), message),
+      'status=${RpcStatus.resourceExhausted.code}',
+      reason: 'a bound that refuses nothing is not a bound',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

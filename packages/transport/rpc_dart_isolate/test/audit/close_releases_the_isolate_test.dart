@@ -100,27 +100,19 @@ Future<int> beatsAfterTeardown({required bool useKill}) async {
 }
 
 void main() {
-  test(
-    'transport.close() stops the worker isolate',
-    () async {
-      expect(
-        await beatsAfterTeardown(useKill: false),
-        0,
-        reason:
-            'the standard lifecycle call left the isolate running: a thread and a '
-            'heap leaked per connection, reclaimable only through kill()',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('transport.close() stops the worker isolate', () async {
+    expect(
+      await beatsAfterTeardown(useKill: false),
+      0,
+      reason:
+          'the standard lifecycle call left the isolate running: a thread and a '
+          'heap leaked per connection, reclaimable only through kill()',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD: kill() still stops the worker isolate',
-    () async {
-      expect(await beatsAfterTeardown(useKill: true), 0);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('GUARD: kill() still stops the worker isolate', () async {
+    expect(await beatsAfterTeardown(useKill: true), 0);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   test(
     'GUARD: the isolate stays alive while the transport is in use',
@@ -149,18 +141,14 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
-  test(
-    'GUARD: closing twice, and closing after kill(), are no-ops',
-    () async {
-      final spawned = await RpcIsolateTransport.spawn(entrypoint: echoWorker);
-      await spawned.transport.close();
-      await spawned.transport.close();
-      spawned.kill();
-      spawned.kill();
-      expect(spawned.transport.isClosed, isTrue);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('GUARD: closing twice, and closing after kill(), are no-ops', () async {
+    final spawned = await RpcIsolateTransport.spawn(entrypoint: echoWorker);
+    await spawned.transport.close();
+    await spawned.transport.close();
+    spawned.kill();
+    spawned.kill();
+    expect(spawned.transport.isClosed, isTrue);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   group('the host process ends after teardown', () {
     /// Runs the support script and reports how it finished. The observable is

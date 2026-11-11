@@ -76,104 +76,92 @@ Future<Object?> _parkOne(
 }
 
 void main() {
-  test(
-    'a send parked past the end of its stream is refused',
-    () async {
-      final (client, server) = RpcChannelTransport.pair(policy: _policy);
-      final delivered = <int>[];
-      final sub = server.incomingMessages.listen((m) {
-        if (m.payload != null) delivered.add(m.payload!.length);
-      });
+  test('a send parked past the end of its stream is refused', () async {
+    final (client, server) = RpcChannelTransport.pair(policy: _policy);
+    final delivered = <int>[];
+    final sub = server.incomingMessages.listen((m) {
+      if (m.payload != null) delivered.add(m.payload!.length);
+    });
 
-      final streamId = client.createStream();
-      // A per-stream view with NO consumer on the far side: messages are buffered
-      // there and credit returns only as a consumer takes them, so none comes
-      // back. Without this the peer credits on arrival and nothing ever parks.
-      server.getMessagesForStream(streamId);
-      await client.sendMetadata(
-        streamId,
-        RpcMetadata.forClientRequest('Svc', 'M'),
-      );
+    final streamId = client.createStream();
+    // A per-stream view with NO consumer on the far side: messages are buffered
+    // there and credit returns only as a consumer takes them, so none comes
+    // back. Without this the peer credits on arrival and nothing ever parks.
+    server.getMessagesForStream(streamId);
+    await client.sendMetadata(
+      streamId,
+      RpcMetadata.forClientRequest('Svc', 'M'),
+    );
 
-      final outcome = await _parkOne(
-        client,
-        streamId,
-        // `finishSending` now WAITS for the parked send, so it cannot be awaited
-        // here — the credit never comes on this stream. Tearing the transport
-        // down is what a call's deadline does, and it is what must wake the
-        // sender with an answer.
-        thenDo: () async {
-          unawaited(client.finishSending(streamId));
-          await Future<void>.delayed(const Duration(milliseconds: 100));
-          await client.close();
-        },
-      );
+    final outcome = await _parkOne(
+      client,
+      streamId,
+      // `finishSending` now WAITS for the parked send, so it cannot be awaited
+      // here — the credit never comes on this stream. Tearing the transport
+      // down is what a call's deadline does, and it is what must wake the
+      // sender with an answer.
+      thenDo: () async {
+        unawaited(client.finishSending(streamId));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await client.close();
+      },
+    );
 
-      expect(
-        outcome,
-        isA<RpcClosedException>(),
-        reason: 'the sender was told nothing: $outcome',
-      );
-      expect(
-        delivered,
-        hasLength(2),
-        reason: 'only what was sent before the end may be delivered',
-      );
+    expect(
+      outcome,
+      isA<RpcClosedException>(),
+      reason: 'the sender was told nothing: $outcome',
+    );
+    expect(
+      delivered,
+      hasLength(2),
+      reason: 'only what was sent before the end may be delivered',
+    );
 
-      await sub.cancel();
-      await server.close();
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    await sub.cancel();
+    await server.close();
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
-  test(
-    'a grant during the wait puts the message out before the end',
-    () async {
-      // The half that must NOT regress: a parked message whose credit arrives is
-      // sent, and sent ahead of the end-of-stream that was held back for it.
-      final (client, server) = RpcChannelTransport.pair(policy: _policy);
-      final delivered = <int>[];
-      var endSeenAfter = -1;
-      final sub = server.incomingMessages.listen((m) {
-        if (m.payload != null) delivered.add(m.payload!.length);
-        if (m.isEndOfStream) endSeenAfter = delivered.length;
-      });
+  test('a grant during the wait puts the message out before the end', () async {
+    // The half that must NOT regress: a parked message whose credit arrives is
+    // sent, and sent ahead of the end-of-stream that was held back for it.
+    final (client, server) = RpcChannelTransport.pair(policy: _policy);
+    final delivered = <int>[];
+    var endSeenAfter = -1;
+    final sub = server.incomingMessages.listen((m) {
+      if (m.payload != null) delivered.add(m.payload!.length);
+      if (m.isEndOfStream) endSeenAfter = delivered.length;
+    });
 
-      final streamId = client.createStream();
-      final view = server.getMessagesForStream(streamId);
-      await client.sendMetadata(
-        streamId,
-        RpcMetadata.forClientRequest('Svc', 'M'),
-      );
+    final streamId = client.createStream();
+    final view = server.getMessagesForStream(streamId);
+    await client.sendMetadata(
+      streamId,
+      RpcMetadata.forClientRequest('Svc', 'M'),
+    );
 
-      final outcome = await _parkOne(
-        client,
-        streamId,
-        thenDo: () async {
-          unawaited(client.finishSending(streamId));
-          // A consumer arrives and drains, which is what returns credit.
-          await view.take(2).toList();
-          await Future<void>.delayed(const Duration(milliseconds: 200));
-        },
-      );
+    final outcome = await _parkOne(
+      client,
+      streamId,
+      thenDo: () async {
+        unawaited(client.finishSending(streamId));
+        // A consumer arrives and drains, which is what returns credit.
+        await view.take(2).toList();
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      },
+    );
 
-      expect(
-        outcome,
-        'written',
-        reason: 'the grant arrived and it still failed',
-      );
-      expect(
-        endSeenAfter,
-        3,
-        reason:
-            'the end-of-stream must come after all three payloads, not after '
-            '$endSeenAfter of them',
-      );
+    expect(outcome, 'written', reason: 'the grant arrived and it still failed');
+    expect(
+      endSeenAfter,
+      3,
+      reason:
+          'the end-of-stream must come after all three payloads, not after '
+          '$endSeenAfter of them',
+    );
 
-      await sub.cancel();
-      await client.close();
-      await server.close();
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    await sub.cancel();
+    await client.close();
+    await server.close();
+  }, timeout: const Timeout(Duration(seconds: 30)));
 }

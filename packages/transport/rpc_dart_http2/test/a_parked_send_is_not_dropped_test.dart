@@ -116,11 +116,10 @@ void main() {
     rig.stream.drain();
     await Future<void>.delayed(const Duration(milliseconds: 100));
 
-    expect(
-      rig.stream.seen,
-      ['data 64B eos=false', 'data 0B eos=true'],
-      reason: 'the payload was queued first, so it must reach the wire first',
-    );
+    expect(rig.stream.seen, [
+      'data 64B eos=false',
+      'data 0B eos=true',
+    ], reason: 'the payload was queued first, so it must reach the wire first');
     final ended = await rig.ended;
     expect(ended.returned, isTrue);
     expect(ended.threw, isNull);

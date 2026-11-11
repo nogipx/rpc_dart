@@ -122,20 +122,16 @@ void main() {
     timeout: const Timeout(Duration(seconds: 30)),
   );
 
-  test(
-    'CONTROL: with no repeat frame, the same rig reads the same',
-    () async {
-      final rig = await _rig();
-      await _openChat(rig.client);
+  test('CONTROL: with no repeat frame, the same rig reads the same', () async {
+    final rig = await _rig();
+    await _openChat(rig.client);
 
-      await rig.responder.drain(timeout: const Duration(seconds: 2));
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+    await rig.responder.drain(timeout: const Duration(seconds: 2));
+    await Future<void>.delayed(const Duration(milliseconds: 300));
 
-      expect(rig.cancelSeen(), 1);
-      expect(rig.disposerRun(), 1);
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(rig.cancelSeen(), 1);
+    expect(rig.disposerRun(), 1);
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
   group('GUARD: the frames that legitimately open a stream still do', () {
     test('a first opening frame binds and serves', () async {

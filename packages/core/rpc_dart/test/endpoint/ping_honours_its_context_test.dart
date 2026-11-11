@@ -110,134 +110,112 @@ Future<_Rig> _rig({bool swallow = true}) async {
 }
 
 void main() {
-  test(
-    'WITNESS: a context deadline bounds the ping locally',
-    () async {
-      final rig = await _rig();
+  test('WITNESS: a context deadline bounds the ping locally', () async {
+    final rig = await _rig();
 
-      final clock = Stopwatch()..start();
-      await expectLater(
-        rig.caller
-            .ping(
-              context: RpcContext.empty().withTimeout(
-                const Duration(milliseconds: 200),
-              ),
-            )
-            .timeout(const Duration(seconds: 3)),
-        throwsA(isA<TimeoutException>()),
-      );
-      clock.stop();
+    final clock = Stopwatch()..start();
+    await expectLater(
+      rig.caller
+          .ping(
+            context: RpcContext.empty().withTimeout(
+              const Duration(milliseconds: 200),
+            ),
+          )
+          .timeout(const Duration(seconds: 3)),
+      throwsA(isA<TimeoutException>()),
+    );
+    clock.stop();
 
-      expect(
-        clock.elapsedMilliseconds,
-        lessThan(1500),
-        reason:
-            'the deadline was sent as grpc-timeout and never enforced locally, so '
-            'the keepalive hung on exactly the connection it exists to detect',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(
+      clock.elapsedMilliseconds,
+      lessThan(1500),
+      reason:
+          'the deadline was sent as grpc-timeout and never enforced locally, so '
+          'the keepalive hung on exactly the connection it exists to detect',
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
-  test(
-    'WITNESS: a token cancelled DURING the wait ends the ping',
-    () async {
-      final rig = await _rig();
-      final token = RpcCancellationToken();
-      Timer(const Duration(milliseconds: 200), () => token.cancel('gave up'));
+  test('WITNESS: a token cancelled DURING the wait ends the ping', () async {
+    final rig = await _rig();
+    final token = RpcCancellationToken();
+    Timer(const Duration(milliseconds: 200), () => token.cancel('gave up'));
 
-      final clock = Stopwatch()..start();
-      await expectLater(
-        rig.caller
-            .ping(context: RpcContext.empty().withCancellation(token))
-            .timeout(const Duration(seconds: 3)),
-        throwsA(isA<RpcCancelledException>()),
-        reason: 'the token was pre-checked once and then never consulted',
-      );
-      clock.stop();
+    final clock = Stopwatch()..start();
+    await expectLater(
+      rig.caller
+          .ping(context: RpcContext.empty().withCancellation(token))
+          .timeout(const Duration(seconds: 3)),
+      throwsA(isA<RpcCancelledException>()),
+      reason: 'the token was pre-checked once and then never consulted',
+    );
+    clock.stop();
 
-      expect(clock.elapsedMilliseconds, lessThan(1500));
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(clock.elapsedMilliseconds, lessThan(1500));
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
   // WITNESS for the clock: `sentAt` is injectable, so a value far in the past
   // stands in for a wall-clock step between the send and the pong. The round
   // trip was `receivedAt.difference(sentAt)` — two wall-clock readings — so a
   // skew of an hour reported an hour.
-  test(
-    'WITNESS: the round trip is measured on a monotonic clock',
-    () async {
-      final (client, server) = RpcChannelTransport.pair();
-      final responder = RpcResponderEndpoint(transport: server)..start();
-      addTearDown(() async {
-        await responder.close();
-        await client.close();
-      });
+  test('WITNESS: the round trip is measured on a monotonic clock', () async {
+    final (client, server) = RpcChannelTransport.pair();
+    final responder = RpcResponderEndpoint(transport: server)..start();
+    addTearDown(() async {
+      await responder.close();
+      await client.close();
+    });
 
-      final streamId = client.createStream();
-      final skewed = DateTime.now().toUtc().subtract(const Duration(hours: 1));
-      final result =
-          await RpcEndpointPingExchange(
-            transport: client,
-            streamId: streamId,
-            sentAt: skewed,
-          ).execute(
-            metadata: RpcMetadata.forClientRequest(
-              RpcEndpointPingProtocol.serviceName,
-              RpcEndpointPingProtocol.methodName,
-            ),
-            timeout: const Duration(seconds: 5),
-          );
+    final streamId = client.createStream();
+    final skewed = DateTime.now().toUtc().subtract(const Duration(hours: 1));
+    final result =
+        await RpcEndpointPingExchange(
+          transport: client,
+          streamId: streamId,
+          sentAt: skewed,
+        ).execute(
+          metadata: RpcMetadata.forClientRequest(
+            RpcEndpointPingProtocol.serviceName,
+            RpcEndpointPingProtocol.methodName,
+          ),
+          timeout: const Duration(seconds: 5),
+        );
 
-      expect(
-        result.roundTrip,
-        lessThan(const Duration(seconds: 5)),
-        reason:
-            'the round trip came from two wall-clock readings, so a step between '
-            'them is reported as the latency',
-      );
-      expect(
-        result.sentAt,
-        skewed,
-        reason: 'sentAt is what went on the wire and must be preserved',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(
+      result.roundTrip,
+      lessThan(const Duration(seconds: 5)),
+      reason:
+          'the round trip came from two wall-clock readings, so a step between '
+          'them is reported as the latency',
+    );
+    expect(
+      result.sentAt,
+      skewed,
+      reason: 'sentAt is what went on the wire and must be preserved',
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
   group('GUARD: what must not change', () {
-    test(
-      'a ping with NO bound asked for still waits',
-      () async {
-        // B-107's policy question, not this one: deriving a bound from the context
-        // must not invent one where the caller asked for nothing.
-        final rig = await _rig();
-        await expectLater(
-          rig.caller.ping().timeout(const Duration(milliseconds: 600)),
-          throwsA(isA<TimeoutException>()),
-          reason: 'the bound must come from the caller, not from nowhere',
-        );
-      },
-      timeout: const Timeout(Duration(seconds: 30)),
-    );
+    test('a ping with NO bound asked for still waits', () async {
+      // B-107's policy question, not this one: deriving a bound from the context
+      // must not invent one where the caller asked for nothing.
+      final rig = await _rig();
+      await expectLater(
+        rig.caller.ping().timeout(const Duration(milliseconds: 600)),
+        throwsA(isA<TimeoutException>()),
+        reason: 'the bound must come from the caller, not from nowhere',
+      );
+    }, timeout: const Timeout(Duration(seconds: 30)));
 
-    test(
-      'a peer that answers is unaffected',
-      () async {
-        final rig = await _rig(swallow: false);
-        final result = await rig.caller
-            .ping(
-              context: RpcContext.empty().withTimeout(
-                const Duration(seconds: 5),
-              ),
-            )
-            .timeout(const Duration(seconds: 10));
+    test('a peer that answers is unaffected', () async {
+      final rig = await _rig(swallow: false);
+      final result = await rig.caller
+          .ping(
+            context: RpcContext.empty().withTimeout(const Duration(seconds: 5)),
+          )
+          .timeout(const Duration(seconds: 10));
 
-        expect(result.roundTrip, greaterThanOrEqualTo(Duration.zero));
-        expect(result.roundTrip, lessThan(const Duration(seconds: 5)));
-      },
-      timeout: const Timeout(Duration(seconds: 30)),
-    );
+      expect(result.roundTrip, greaterThanOrEqualTo(Duration.zero));
+      expect(result.roundTrip, lessThan(const Duration(seconds: 5)));
+    }, timeout: const Timeout(Duration(seconds: 30)));
   });
 }

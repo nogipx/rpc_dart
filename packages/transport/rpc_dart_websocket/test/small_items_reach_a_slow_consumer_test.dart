@@ -94,53 +94,41 @@ Stream<RpcString> _count(RpcCallerEndpoint caller, int n) =>
     );
 
 void main() {
-  test(
-    'WITNESS 10000 small items reach a fast reader',
-    () async {
-      final caller = await _connect();
+  test('WITNESS 10000 small items reach a fast reader', () async {
+    final caller = await _connect();
 
-      final got = await _count(caller, 10000).length;
+    final got = await _count(caller, 10000).length;
 
-      expect(got, 10000);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(got, 10000);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'WITNESS a slow reader gets every item',
-    () async {
-      final caller = await _connect();
+  test('WITNESS a slow reader gets every item', () async {
+    final caller = await _connect();
 
-      var got = 0;
-      await for (final _ in _count(caller, 3000)) {
-        got++;
-        await Future<void>.delayed(_slow);
-      }
+    var got = 0;
+    await for (final _ in _count(caller, 3000)) {
+      got++;
+      await Future<void>.delayed(_slow);
+    }
 
-      expect(got, 3000);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(got, 3000);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'a slow handler gets every uploaded item',
-    () async {
-      final caller = await _connect();
-      Future<RpcString> call(Stream<RpcString> requests) =>
-          caller.clientStream<RpcString, RpcString>(
-            requests: requests,
-            serviceName: 'Svc',
-            methodName: 'collect',
-            requestCodec: _codec,
-            responseCodec: _codec,
-          );
+  test('a slow handler gets every uploaded item', () async {
+    final caller = await _connect();
+    Future<RpcString> call(Stream<RpcString> requests) =>
+        caller.clientStream<RpcString, RpcString>(
+          requests: requests,
+          serviceName: 'Svc',
+          methodName: 'collect',
+          requestCodec: _codec,
+          responseCodec: _codec,
+        );
 
-      final response = await call(
-        Stream.fromIterable([for (var i = 0; i < 3000; i++) 'i$i'.rpc]),
-      );
+    final response = await call(
+      Stream.fromIterable([for (var i = 0; i < 3000; i++) 'i$i'.rpc]),
+    );
 
-      expect(response.value, '3000');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(response.value, '3000');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

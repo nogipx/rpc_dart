@@ -88,98 +88,93 @@ const _bursts = 3;
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets(
-    'a large host->guest frame is not overtaken by small ones',
-    (_) async {
-      final wasm = (await rootBundle.load(
-        'assets/guest.wasm',
-      )).buffer.asUint8List();
-      final mjs = await rootBundle.loadString('assets/guest.mjs');
-      final bridge = await RpcFlutterWasmBridge.load(
-        wasmBytes: wasm,
-        mjsCode: mjs,
-      ).timeout(const Duration(seconds: 60));
-      final counting = _CountingBridge(bridge);
-      final caller = RpcCallerEndpoint(
-        transport: RpcWasmTransport.fromBridge(
-          bridge: counting,
-          isClient: true,
-        ),
-      );
+  testWidgets('a large host->guest frame is not overtaken by small ones', (
+    _,
+  ) async {
+    final wasm = (await rootBundle.load(
+      'assets/guest.wasm',
+    )).buffer.asUint8List();
+    final mjs = await rootBundle.loadString('assets/guest.mjs');
+    final bridge = await RpcFlutterWasmBridge.load(
+      wasmBytes: wasm,
+      mjsCode: mjs,
+    ).timeout(const Duration(seconds: 60));
+    final counting = _CountingBridge(bridge);
+    final caller = RpcCallerEndpoint(
+      transport: RpcWasmTransport.fromBridge(bridge: counting, isClient: true),
+    );
 
-      Future<String> say(String payload) => caller
-          .unary<RpcString, RpcString>(
-            serviceName: 'Echo',
-            methodName: 'Say',
-            request: payload.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          )
-          .then((r) => r.value);
+    Future<String> say(String payload) => caller
+        .unary<RpcString, RpcString>(
+          serviceName: 'Echo',
+          methodName: 'Say',
+          request: payload.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .then((r) => r.value);
 
-      // The large requests and the small ones are issued in ONE turn, so the
-      // plugin sees them concurrently — which is the only way the two forward
-      // paths can overlap. SEVERAL large ones, and the whole burst repeated:
-      // one large frame among fifty is a single chance per run, and a race that
-      // needs a particular interleaving is not refuted by one chance.
-      final big = 'B' * _bigBytes;
-      final clock = Stopwatch()..start();
-      late List<String> results;
-      for (var round = 0; round < _bursts; round++) {
-        results = await Future.wait([
-          for (var b = 0; b < _bigCount; b++) say(big),
-          for (var i = 0; i < _smallCount; i++) say('small-$i'),
-        ]).timeout(const Duration(minutes: 2));
-        for (var b = 0; b < _bigCount; b++) {
-          expect(
-            results[b],
-            'echo:$big',
-            reason:
-                'burst $round: a large frame was overtaken, so the guest '
-                'reassembled its header from the middle of another frame',
-          );
-        }
-        for (var i = 0; i < _smallCount; i++) {
-          expect(results[_bigCount + i], 'echo:small-$i');
-        }
+    // The large requests and the small ones are issued in ONE turn, so the
+    // plugin sees them concurrently — which is the only way the two forward
+    // paths can overlap. SEVERAL large ones, and the whole burst repeated:
+    // one large frame among fifty is a single chance per run, and a race that
+    // needs a particular interleaving is not refuted by one chance.
+    final big = 'B' * _bigBytes;
+    final clock = Stopwatch()..start();
+    late List<String> results;
+    for (var round = 0; round < _bursts; round++) {
+      results = await Future.wait([
+        for (var b = 0; b < _bigCount; b++) say(big),
+        for (var i = 0; i < _smallCount; i++) say('small-$i'),
+      ]).timeout(const Duration(minutes: 2));
+      for (var b = 0; b < _bigCount; b++) {
+        expect(
+          results[b],
+          'echo:$big',
+          reason:
+              'burst $round: a large frame was overtaken, so the guest '
+              'reassembled its header from the middle of another frame',
+        );
       }
+      for (var i = 0; i < _smallCount; i++) {
+        expect(results[_bigCount + i], 'echo:small-$i');
+      }
+    }
 
-      final bigOverlaps = counting.overlappedSizes
-          .where((n) => n >= 64 * 1024)
-          .length;
-      // ignore: avoid_print
-      print(
-        'platform: ${Platform.operatingSystem}  '
-        'big: $_bigBytes B  small: $_smallCount  '
-        'elapsed: ${clock.elapsedMilliseconds}ms  '
-        'peak forwards in flight: ${counting.peakInFlight}  '
-        'overlapped frames: ${counting.overlappedSizes.length} '
-        '(>=64 KiB: $bigOverlaps)',
-      );
+    final bigOverlaps = counting.overlappedSizes
+        .where((n) => n >= 64 * 1024)
+        .length;
+    // ignore: avoid_print
+    print(
+      'platform: ${Platform.operatingSystem}  '
+      'big: $_bigBytes B  small: $_smallCount  '
+      'elapsed: ${clock.elapsedMilliseconds}ms  '
+      'peak forwards in flight: ${counting.peakInFlight}  '
+      'overlapped frames: ${counting.overlappedSizes.length} '
+      '(>=64 KiB: $bigOverlaps)',
+    );
 
-      // The bench's OWN precondition. Without an overlap the arm proves nothing
-      // about ordering, so say so here rather than reporting a pass.
-      expect(
-        counting.peakInFlight,
-        greaterThan(1),
-        reason:
-            'no two forwards were ever in flight together, so this run could '
-            'not have observed a reorder either way',
-      );
+    // The bench's OWN precondition. Without an overlap the arm proves nothing
+    // about ordering, so say so here rather than reporting a pass.
+    expect(
+      counting.peakInFlight,
+      greaterThan(1),
+      reason:
+          'no two forwards were ever in flight together, so this run could '
+          'not have observed a reorder either way',
+    );
 
-      // Every answer belongs to its own request, asserted per burst above. A
-      // reorder on the byte stream shows up as a framing failure (the call
-      // errors), a mismatched echo, or a hang — all three fail there.
-      expect(results, hasLength(_bigCount + _smallCount));
+    // Every answer belongs to its own request, asserted per burst above. A
+    // reorder on the byte stream shows up as a framing failure (the call
+    // errors), a mismatched echo, or a hang — all three fail there.
+    expect(results, hasLength(_bigCount + _smallCount));
 
-      // GUARD: the connection is still usable afterwards. A corrupted byte
-      // stream that happened to parse would leave the channel wrong rather
-      // than failing the calls above.
-      expect(await say('after'), 'echo:after');
+    // GUARD: the connection is still usable afterwards. A corrupted byte
+    // stream that happened to parse would leave the channel wrong rather
+    // than failing the calls above.
+    expect(await say('after'), 'echo:after');
 
-      await caller.close();
-      await bridge.close();
-    },
-    timeout: const Timeout(Duration(minutes: 5)),
-  );
+    await caller.close();
+    await bridge.close();
+  }, timeout: const Timeout(Duration(minutes: 5)));
 }

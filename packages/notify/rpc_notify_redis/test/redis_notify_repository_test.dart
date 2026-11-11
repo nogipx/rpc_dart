@@ -196,41 +196,37 @@ void main() {
       },
     );
 
-    test(
-      'reconnects after connection drop and re-delivers events',
-      () async {
-        const topic = 'reconnect-test';
-        final received = <String>[];
+    test('reconnects after connection drop and re-delivers events', () async {
+      const topic = 'reconnect-test';
+      final received = <String>[];
 
-        repo
-            .subscribe('client-1', topic)
-            .listen((e) => received.add(e.payload['v'] as String));
-        await Future<void>.delayed(const Duration(milliseconds: 50));
+      repo
+          .subscribe('client-1', topic)
+          .listen((e) => received.add(e.payload['v'] as String));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
 
-        // Kill the repo's subscriber connection (it is in pubsub mode) from a
-        // separate admin connection to simulate a Redis connection drop.
-        final admin = await RedisConnection().connect(_host, _port);
-        try {
-          await admin.send_object(['CLIENT', 'KILL', 'TYPE', 'pubsub']);
-        } finally {
-          await admin.get_connection().close();
-        }
+      // Kill the repo's subscriber connection (it is in pubsub mode) from a
+      // separate admin connection to simulate a Redis connection drop.
+      final admin = await RedisConnection().connect(_host, _port);
+      try {
+        await admin.send_object(['CLIENT', 'KILL', 'TYPE', 'pubsub']);
+      } finally {
+        await admin.get_connection().close();
+      }
 
-        // Wait for reconnect: onDone is immediate, then the first backoff (1s).
-        await Future<void>.delayed(const Duration(milliseconds: 1500));
+      // Wait for reconnect: onDone is immediate, then the first backoff (1s).
+      await Future<void>.delayed(const Duration(milliseconds: 1500));
 
-        // Publish from a fresh repo — the reconnected repo should receive it.
-        final publisher = await _connect();
-        try {
-          publisher.publish(topic, {'v': 'after-reconnect'});
-          await Future<void>.delayed(const Duration(milliseconds: 300));
-          expect(received, ['after-reconnect']);
-        } finally {
-          await publisher.dispose();
-        }
-      },
-      timeout: const Timeout(Duration(seconds: 10)),
-    );
+      // Publish from a fresh repo — the reconnected repo should receive it.
+      final publisher = await _connect();
+      try {
+        publisher.publish(topic, {'v': 'after-reconnect'});
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        expect(received, ['after-reconnect']);
+      } finally {
+        await publisher.dispose();
+      }
+    }, timeout: const Timeout(Duration(seconds: 10)));
 
     test(
       'recovers from a SECOND drop, so the reconnect latch is never stranded',

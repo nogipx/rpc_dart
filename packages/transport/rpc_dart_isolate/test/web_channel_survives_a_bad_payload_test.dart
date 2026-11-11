@@ -95,11 +95,10 @@ void main() {
             'one bad payload closed the channel, taking every other in-flight '
             'call with it',
       );
-      expect(
-        send.sent.map((frame) => frame['streamId']).toList(),
-        [3, 5],
-        reason: 'the frames either side of the refusal must still be sent',
-      );
+      expect(send.sent.map((frame) => frame['streamId']).toList(), [
+        3,
+        5,
+      ], reason: 'the frames either side of the refusal must still be sent');
     });
 
     test('WITNESS: the channel still RECEIVES after a refused send', () async {

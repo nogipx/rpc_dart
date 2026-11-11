@@ -63,17 +63,13 @@ Future<int> _receive({required int count, required int size}) async {
 }
 
 void main() {
-  test(
-    'WITNESS messages larger than the default window all arrive',
-    () async {
-      expect(
-        await _receive(count: 3, size: 7 * 1000 * 1000),
-        3,
-        reason: 'the stream stalled once a grant was cut to the window',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('WITNESS messages larger than the default window all arrive', () async {
+    expect(
+      await _receive(count: 3, size: 7 * 1000 * 1000),
+      3,
+      reason: 'the stream stalled once a grant was cut to the window',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   test('messages within the window are unaffected', () async {
     expect(await _receive(count: 50, size: 64 * 1024), 50);

@@ -128,79 +128,63 @@ Future<_Run> _call({required bool compressionEnabled}) async {
 // Which also means the shipped state differs by platform at the top of this file —
 // gzip on the VM, nothing on dart2js — and no test may assume either.
 void main() {
-  test(
-    'WITNESS a call still works when no codec is registered',
-    () async {
-      RpcGrpcCompression.unregister(RpcGrpcCompression.gzip);
-      expect(
-        RpcGrpcCompression.isSupported(RpcGrpcCompression.gzip),
-        isFalse,
-        reason: 'the premise: this is dart2js\'s shipped state',
-      );
+  test('WITNESS a call still works when no codec is registered', () async {
+    RpcGrpcCompression.unregister(RpcGrpcCompression.gzip);
+    expect(
+      RpcGrpcCompression.isSupported(RpcGrpcCompression.gzip),
+      isFalse,
+      reason: 'the premise: this is dart2js\'s shipped state',
+    );
 
-      final r = await _call(compressionEnabled: true);
+    final r = await _call(compressionEnabled: true);
 
-      expect(
-        r.outcome,
-        'echoed',
-        reason:
-            'the caller declared gzip from a constant, so the peer refused an '
-            'encoding neither side had',
-      );
-      expect(
-        r.declared,
-        isNull,
-        reason: 'nothing can be performed, so nothing may be announced',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(
+      r.outcome,
+      'echoed',
+      reason:
+          'the caller declared gzip from a constant, so the peer refused an '
+          'encoding neither side had',
+    );
+    expect(
+      r.declared,
+      isNull,
+      reason: 'nothing can be performed, so nothing may be announced',
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
-  test(
-    'GUARD a registered codec IS announced and used',
-    () async {
-      // Without this the fix could pass by never compressing anything.
-      RpcGrpcCompression.unregister(RpcGrpcCompression.gzip);
-      RpcGrpcCompression.register('x-runlength', const _RunLength());
-      addTearDown(() => RpcGrpcCompression.unregister('x-runlength'));
+  test('GUARD a registered codec IS announced and used', () async {
+    // Without this the fix could pass by never compressing anything.
+    RpcGrpcCompression.unregister(RpcGrpcCompression.gzip);
+    RpcGrpcCompression.register('x-runlength', const _RunLength());
+    addTearDown(() => RpcGrpcCompression.unregister('x-runlength'));
 
-      final r = await _call(compressionEnabled: true);
+    final r = await _call(compressionEnabled: true);
 
-      expect(r.outcome, 'echoed');
-      expect(r.declared, 'x-runlength');
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(r.outcome, 'echoed');
+    expect(r.declared, 'x-runlength');
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
-  test(
-    'GUARD gzip is still preferred when it is there',
-    () async {
-      // The shipped default must not change for anyone who has gzip.
-      if (!RpcGrpcCompression.isSupported(RpcGrpcCompression.gzip)) {
-        RpcGrpcCompression.register('gzip', const _RunLength());
-      }
-      RpcGrpcCompression.register('x-runlength', const _RunLength());
-      addTearDown(() => RpcGrpcCompression.unregister('x-runlength'));
+  test('GUARD gzip is still preferred when it is there', () async {
+    // The shipped default must not change for anyone who has gzip.
+    if (!RpcGrpcCompression.isSupported(RpcGrpcCompression.gzip)) {
+      RpcGrpcCompression.register('gzip', const _RunLength());
+    }
+    RpcGrpcCompression.register('x-runlength', const _RunLength());
+    addTearDown(() => RpcGrpcCompression.unregister('x-runlength'));
 
-      final r = await _call(compressionEnabled: true);
+    final r = await _call(compressionEnabled: true);
 
-      expect(r.outcome, 'echoed');
-      expect(
-        r.declared,
-        'gzip',
-        reason: 'gzip is preferred over any other registered encoding',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(r.outcome, 'echoed');
+    expect(
+      r.declared,
+      'gzip',
+      reason: 'gzip is preferred over any other registered encoding',
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
-  test(
-    'CONTROL compression off works in either registry state',
-    () async {
-      expect((await _call(compressionEnabled: false)).outcome, 'echoed');
-      RpcGrpcCompression.unregister(RpcGrpcCompression.gzip);
-      expect((await _call(compressionEnabled: false)).outcome, 'echoed');
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+  test('CONTROL compression off works in either registry state', () async {
+    expect((await _call(compressionEnabled: false)).outcome, 'echoed');
+    RpcGrpcCompression.unregister(RpcGrpcCompression.gzip);
+    expect((await _call(compressionEnabled: false)).outcome, 'echoed');
+  }, timeout: const Timeout(Duration(seconds: 30)));
 }

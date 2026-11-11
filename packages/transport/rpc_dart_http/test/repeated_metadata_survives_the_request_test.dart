@@ -72,33 +72,25 @@ Future<({List<String>? tag, HttpServer server})> _send(
 }
 
 void main() {
-  test(
-    'WITNESS: two values of one metadata key both reach the server',
-    () async {
-      final run = await _send(['first', 'second']);
+  test('WITNESS: two values of one metadata key both reach the server', () async {
+    final run = await _send(['first', 'second']);
 
-      // dart:io reports one field line, so the values arrive joined. Both must be
-      // THERE; which of the two encodings the peer sees is the spec's business.
-      expect(
-        run.tag?.join(',').split(','),
-        ['first', 'second'],
-        reason:
-            'the first value was dropped before the request left: assigning twice '
-            'into a Map<String, String> keeps only the last',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    // dart:io reports one field line, so the values arrive joined. Both must be
+    // THERE; which of the two encodings the peer sees is the spec's business.
+    expect(
+      run.tag?.join(',').split(','),
+      ['first', 'second'],
+      reason:
+          'the first value was dropped before the request left: assigning twice '
+          'into a Map<String, String> keeps only the last',
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
   // CONTROL: one value must be unchanged — not wrapped, not given a stray comma by
   // the join. A fix that always appended a delimiter would pass the witness.
-  test(
-    'CONTROL: a single value is sent exactly as given',
-    () async {
-      final run = await _send(['only']);
+  test('CONTROL: a single value is sent exactly as given', () async {
+    final run = await _send(['only']);
 
-      expect(run.tag, ['only']);
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(run.tag, ['only']);
+  }, timeout: const Timeout(Duration(seconds: 30)));
 }

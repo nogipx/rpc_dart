@@ -202,39 +202,35 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
-  test(
-    'GUARD: an ordinary request with real metadata is unaffected',
-    () async {
-      server = RpcHttp2Server(
-        host: '127.0.0.1',
-        port: 0,
-        mode: RpcResponderMode((e) => e.registerServiceContract(_Contract())),
-      );
-      await server.start();
+  test('GUARD: an ordinary request with real metadata is unaffected', () async {
+    server = RpcHttp2Server(
+      host: '127.0.0.1',
+      port: 0,
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Contract())),
+    );
+    await server.start();
 
-      final t = await RpcHttp2CallerTransport.connect(
-        host: '127.0.0.1',
-        port: server.port,
-      );
-      final caller = RpcCallerEndpoint(transport: t);
-      // A fat-but-legal header value: a few KiB of metadata, well under the
-      // 64 KiB header-block cap, so the guard must let the header block through
-      // untouched. Sent as a real HTTP/2 header via the request context.
-      final r = await caller
-          .unary<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'Echo',
-            request: 'x'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-            context: RpcContext.withHeaders({'x-tag': 'v' * 4096}),
-          )
-          .timeout(const Duration(seconds: 8));
-      expect(r.value, 'echo-ok');
+    final t = await RpcHttp2CallerTransport.connect(
+      host: '127.0.0.1',
+      port: server.port,
+    );
+    final caller = RpcCallerEndpoint(transport: t);
+    // A fat-but-legal header value: a few KiB of metadata, well under the
+    // 64 KiB header-block cap, so the guard must let the header block through
+    // untouched. Sent as a real HTTP/2 header via the request context.
+    final r = await caller
+        .unary<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'Echo',
+          request: 'x'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+          context: RpcContext.withHeaders({'x-tag': 'v' * 4096}),
+        )
+        .timeout(const Duration(seconds: 8));
+    expect(r.value, 'echo-ok');
 
-      await caller.close().catchError((Object _) {});
-      await t.close().catchError((Object _) {});
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    await caller.close().catchError((Object _) {});
+    await t.close().catchError((Object _) {});
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

@@ -408,123 +408,114 @@ void main() {
     });
 
     group('🌊 Mixed Streaming Scenarios', () {
-      test(
-        'должен обрабатывать все типы стримов одновременно',
-        () async {
-          // Arrange
-          final router = RpcTransportRouterBuilder.client()
-              .routeCall(
-                calledServiceName: 'MixedService',
-                toTransport: userClientTransport,
-                priority: 100,
-              )
-              .build();
+      test('должен обрабатывать все типы стримов одновременно', () async {
+        // Arrange
+        final router = RpcTransportRouterBuilder.client()
+            .routeCall(
+              calledServiceName: 'MixedService',
+              toTransport: userClientTransport,
+              priority: 100,
+            )
+            .build();
 
-          final serverEndpoint = RpcResponderEndpoint(
-            transport: userServerTransport,
-          );
-          final testService = _TestStreamingService(
-            serviceName: 'MixedService',
-          );
-          serverEndpoint.registerServiceContract(testService);
-          serverEndpoint.start();
+        final serverEndpoint = RpcResponderEndpoint(
+          transport: userServerTransport,
+        );
+        final testService = _TestStreamingService(serviceName: 'MixedService');
+        serverEndpoint.registerServiceContract(testService);
+        serverEndpoint.start();
 
-          final clientEndpoint = RpcCallerEndpoint(transport: router);
+        final clientEndpoint = RpcCallerEndpoint(transport: router);
 
-          try {
-            // Act - выполняем все типы стримов параллельно с таймаутами
-            final futures = <Future>[];
+        try {
+          // Act - выполняем все типы стримов параллельно с таймаутами
+          final futures = <Future>[];
 
-            // 1. Unary Request
-            futures.add(() async {
-              final response = await clientEndpoint
-                  .unary<RpcString, RpcString>(
-                    serviceName: 'MixedService',
-                    methodName: 'Echo',
-                    requestCodec: RpcString.codec,
-                    responseCodec: RpcString.codec,
-                    request: 'unary_test'.rpc,
-                  )
-                  .timeout(Duration(seconds: 5));
-              expect(response.value, equals('Echo: unary_test'));
-            }());
+          // 1. Unary Request
+          futures.add(() async {
+            final response = await clientEndpoint
+                .unary<RpcString, RpcString>(
+                  serviceName: 'MixedService',
+                  methodName: 'Echo',
+                  requestCodec: RpcString.codec,
+                  responseCodec: RpcString.codec,
+                  request: 'unary_test'.rpc,
+                )
+                .timeout(Duration(seconds: 5));
+            expect(response.value, equals('Echo: unary_test'));
+          }());
 
-            // 2. Server Stream
-            futures.add(() async {
-              final responses = <RpcString>[];
-              final stream = clientEndpoint.serverStream<RpcString, RpcString>(
-                serviceName: 'MixedService',
-                methodName: 'GetNumbers',
-                requestCodec: RpcString.codec,
-                responseCodec: RpcString.codec,
-                request: '3'.rpc,
-              );
+          // 2. Server Stream
+          futures.add(() async {
+            final responses = <RpcString>[];
+            final stream = clientEndpoint.serverStream<RpcString, RpcString>(
+              serviceName: 'MixedService',
+              methodName: 'GetNumbers',
+              requestCodec: RpcString.codec,
+              responseCodec: RpcString.codec,
+              request: '3'.rpc,
+            );
 
-              await for (final response in stream.timeout(
-                Duration(seconds: 5),
-              )) {
-                responses.add(response);
-              }
-              expect(responses.length, equals(3));
-            }());
+            await for (final response in stream.timeout(Duration(seconds: 5))) {
+              responses.add(response);
+            }
+            expect(responses.length, equals(3));
+          }());
 
-            // 3. Client Stream
-            futures.add(() async {
-              Future<RpcString> clientStreamBuilder(
-                Stream<RpcString> requests,
-              ) => clientEndpoint.clientStream<RpcString, RpcString>(
-                requests: requests,
-                serviceName: 'MixedService',
-                methodName: 'ProcessPayments',
-                requestCodec: RpcString.codec,
-                responseCodec: RpcString.codec,
-              );
+          // 3. Client Stream
+          futures.add(() async {
+            Future<RpcString> clientStreamBuilder(Stream<RpcString> requests) =>
+                clientEndpoint.clientStream<RpcString, RpcString>(
+                  requests: requests,
+                  serviceName: 'MixedService',
+                  methodName: 'ProcessPayments',
+                  requestCodec: RpcString.codec,
+                  responseCodec: RpcString.codec,
+                );
 
-              final requests = ['item1'.rpc, 'item2'.rpc];
-              final response = await clientStreamBuilder(
-                Stream.fromIterable(requests),
-              ).timeout(Duration(seconds: 5));
-              expect(response, equals('Processed 2 requests'.rpc));
-            }());
+            final requests = ['item1'.rpc, 'item2'.rpc];
+            final response = await clientStreamBuilder(
+              Stream.fromIterable(requests),
+            ).timeout(Duration(seconds: 5));
+            expect(response, equals('Processed 2 requests'.rpc));
+          }());
 
-            // 4. Bidirectional Stream
-            futures.add(() async {
-              final requestController = StreamController<RpcString>();
-              final responses = <RpcString>[];
+          // 4. Bidirectional Stream
+          futures.add(() async {
+            final requestController = StreamController<RpcString>();
+            final responses = <RpcString>[];
 
-              final responseStream = clientEndpoint
-                  .bidirectionalStream<RpcString, RpcString>(
-                    serviceName: 'MixedService',
-                    methodName: 'Chat',
-                    requestCodec: RpcString.codec,
-                    responseCodec: RpcString.codec,
-                    requests: requestController.stream,
-                  );
+            final responseStream = clientEndpoint
+                .bidirectionalStream<RpcString, RpcString>(
+                  serviceName: 'MixedService',
+                  methodName: 'Chat',
+                  requestCodec: RpcString.codec,
+                  responseCodec: RpcString.codec,
+                  requests: requestController.stream,
+                );
 
-              final subscription = responseStream
-                  .timeout(Duration(seconds: 5))
-                  .listen(responses.add);
+            final subscription = responseStream
+                .timeout(Duration(seconds: 5))
+                .listen(responses.add);
 
-              requestController.add('chat_test'.rpc);
-              await Future.delayed(Duration(milliseconds: 1));
-              await requestController.close();
-              await Future.delayed(Duration(milliseconds: 1));
+            requestController.add('chat_test'.rpc);
+            await Future.delayed(Duration(milliseconds: 1));
+            await requestController.close();
+            await Future.delayed(Duration(milliseconds: 1));
 
-              expect(responses.length, greaterThanOrEqualTo(1));
-              await subscription.cancel();
-            }());
+            expect(responses.length, greaterThanOrEqualTo(1));
+            await subscription.cancel();
+          }());
 
-            // Assert - все операции должны завершиться успешно
-            await Future.wait(futures).timeout(Duration(seconds: 10));
-          } finally {
-            // Cleanup
-            await router.close();
-            await serverEndpoint.close();
-            await clientEndpoint.close();
-          }
-        },
-        timeout: Timeout(Duration(seconds: 15)),
-      ); // Увеличиваем общий таймаут
+          // Assert - все операции должны завершиться успешно
+          await Future.wait(futures).timeout(Duration(seconds: 10));
+        } finally {
+          // Cleanup
+          await router.close();
+          await serverEndpoint.close();
+          await clientEndpoint.close();
+        }
+      }, timeout: Timeout(Duration(seconds: 15))); // Увеличиваем общий таймаут
     });
 
     group('Error Handling в Streaming', () {

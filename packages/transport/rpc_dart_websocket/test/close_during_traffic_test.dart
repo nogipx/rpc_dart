@@ -104,89 +104,71 @@ Future<String> _sendUntilStuck(
 }
 
 void main() {
-  test(
-    'close() releases a sender parked on credit',
-    () async {
-      final rig = await _connect();
-      final id = rig.client.createStream();
+  test('close() releases a sender parked on credit', () async {
+    final rig = await _connect();
+    final id = rig.client.createStream();
+    rig.client.getMessagesForStream(id).listen((_) {}, onError: (Object _) {});
+    await rig.client.sendMetadata(
+      id,
+      RpcMetadata.forClientRequest('Svc', 'deaf'),
+    );
+
+    // Held, not awaited: this is the future that hangs forever if close()
+    // leaves the waiter asleep.
+    final sending = _sendUntilStuck(rig.client, id);
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+
+    await rig.client.close();
+
+    await expectLater(
+      sending.timeout(const Duration(seconds: 5)),
+      completes,
+      reason:
+          'the send loop must return once the transport is closed, not '
+          'wait forever on credit from a peer that is gone',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
+
+  test('close() itself returns promptly with senders parked', () async {
+    final rig = await _connect();
+    final id = rig.client.createStream();
+    rig.client.getMessagesForStream(id).listen((_) {}, onError: (Object _) {});
+    await rig.client.sendMetadata(
+      id,
+      RpcMetadata.forClientRequest('Svc', 'deaf'),
+    );
+
+    unawaited(_sendUntilStuck(rig.client, id));
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+
+    final started = DateTime.now();
+    await rig.client.close().timeout(const Duration(seconds: 5));
+    final elapsed = DateTime.now().difference(started);
+
+    expect(
+      elapsed.inMilliseconds,
+      lessThan(2000),
+      reason: 'close() waiting on its own parked senders is the failure mode',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
+
+  test('GUARD: an unparked sender still completes normally', () async {
+    // Load-bearing: without it, "the send loop returns" would also pass on a
+    // transport that refuses every send outright.
+    final rig = await _connect();
+    final id = rig.client.createStream();
+    rig.client.getMessagesForStream(id).listen((_) {}, onError: (Object _) {});
+    await rig.client.sendMetadata(
+      id,
+      RpcMetadata.forClientRequest('Svc', 'deaf'),
+    );
+
+    // One small message fits in the initial window, so this must not park.
+    await expectLater(
       rig.client
-          .getMessagesForStream(id)
-          .listen((_) {}, onError: (Object _) {});
-      await rig.client.sendMetadata(
-        id,
-        RpcMetadata.forClientRequest('Svc', 'deaf'),
-      );
-
-      // Held, not awaited: this is the future that hangs forever if close()
-      // leaves the waiter asleep.
-      final sending = _sendUntilStuck(rig.client, id);
-      await Future<void>.delayed(const Duration(milliseconds: 400));
-
-      await rig.client.close();
-
-      await expectLater(
-        sending.timeout(const Duration(seconds: 5)),
-        completes,
-        reason:
-            'the send loop must return once the transport is closed, not '
-            'wait forever on credit from a peer that is gone',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
-
-  test(
-    'close() itself returns promptly with senders parked',
-    () async {
-      final rig = await _connect();
-      final id = rig.client.createStream();
-      rig.client
-          .getMessagesForStream(id)
-          .listen((_) {}, onError: (Object _) {});
-      await rig.client.sendMetadata(
-        id,
-        RpcMetadata.forClientRequest('Svc', 'deaf'),
-      );
-
-      unawaited(_sendUntilStuck(rig.client, id));
-      await Future<void>.delayed(const Duration(milliseconds: 400));
-
-      final started = DateTime.now();
-      await rig.client.close().timeout(const Duration(seconds: 5));
-      final elapsed = DateTime.now().difference(started);
-
-      expect(
-        elapsed.inMilliseconds,
-        lessThan(2000),
-        reason: 'close() waiting on its own parked senders is the failure mode',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
-
-  test(
-    'GUARD: an unparked sender still completes normally',
-    () async {
-      // Load-bearing: without it, "the send loop returns" would also pass on a
-      // transport that refuses every send outright.
-      final rig = await _connect();
-      final id = rig.client.createStream();
-      rig.client
-          .getMessagesForStream(id)
-          .listen((_) {}, onError: (Object _) {});
-      await rig.client.sendMetadata(
-        id,
-        RpcMetadata.forClientRequest('Svc', 'deaf'),
-      );
-
-      // One small message fits in the initial window, so this must not park.
-      await expectLater(
-        rig.client
-            .sendMessage(id, RpcMessageFrame.encode(Uint8List(64)))
-            .timeout(const Duration(seconds: 5)),
-        completes,
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+          .sendMessage(id, RpcMessageFrame.encode(Uint8List(64)))
+          .timeout(const Duration(seconds: 5)),
+      completes,
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

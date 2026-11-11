@@ -150,64 +150,58 @@ Future<RpcString> _echo(RpcCallerEndpoint caller) =>
     );
 
 void main() {
-  test(
-    'a body that never arrives leaves no stream in the pipeline',
-    () async {
-      // WITNESS. Pre-fix: openStreams stayed at 4 and the call below failed
-      // RESOURCE_EXHAUSTED until the 60s half-open reclaim.
-      final rig = await _serve();
+  test('a body that never arrives leaves no stream in the pipeline', () async {
+    // WITNESS. Pre-fix: openStreams stayed at 4 and the call below failed
+    // RESOURCE_EXHAUSTED until the 60s half-open reclaim.
+    final rig = await _serve();
 
-      // Arrival is read at the PEER, not polled from `pendingRequests`. Two
-      // sampled versions of this check both failed on CI as `Actual: <0>`, which
-      // is what a poll says whether nothing arrived or it looked at the wrong
-      // moment -- so the number could not name its own cause. The three outcomes
-      // below can: a status, `closed`, or `STILL DRAINING`.
-      //
-      // 408 is emitted at one place, in the accepted path's catch; every
-      // pre-registration refusal answers its own code through `_reject`. So it
-      // says the request reached the transport AND that bodyReadTimeout released
-      // it -- which is what the next expectation assumes and never checked.
-      final answers = await Future.wait(
-        [
-          for (var i = 0; i < _maxActiveStreams; i++) _silentMidBody(rig.port),
-        ].map(
-          (f) => f.timeout(
-            _bodyReadTimeout * 6,
-            onTimeout: () => 'STILL DRAINING',
-          ),
-        ),
-      );
-      expect(
-        answers,
-        everyElement(contains('408')),
-        reason:
-            'each aborted request must reach the transport and be released '
-            'by bodyReadTimeout',
-      );
+    // Arrival is read at the PEER, not polled from `pendingRequests`. Two
+    // sampled versions of this check both failed on CI as `Actual: <0>`, which
+    // is what a poll says whether nothing arrived or it looked at the wrong
+    // moment -- so the number could not name its own cause. The three outcomes
+    // below can: a status, `closed`, or `STILL DRAINING`.
+    //
+    // 408 is emitted at one place, in the accepted path's catch; every
+    // pre-registration refusal answers its own code through `_reject`. So it
+    // says the request reached the transport AND that bodyReadTimeout released
+    // it -- which is what the next expectation assumes and never checked.
+    final answers = await Future.wait(
+      [
+        for (var i = 0; i < _maxActiveStreams; i++) _silentMidBody(rig.port),
+      ].map(
+        (f) =>
+            f.timeout(_bodyReadTimeout * 6, onTimeout: () => 'STILL DRAINING'),
+      ),
+    );
+    expect(
+      answers,
+      everyElement(contains('408')),
+      reason:
+          'each aborted request must reach the transport and be released '
+          'by bodyReadTimeout',
+    );
 
-      // And for the transport's own budget to come back with them.
-      expect(
-        await _until(
-          () => _pendingRequests(rig.transport),
-          0,
-          _bodyReadTimeout * 3,
-        ),
+    // And for the transport's own budget to come back with them.
+    expect(
+      await _until(
+        () => _pendingRequests(rig.transport),
         0,
-        reason: 'bodyReadTimeout must release the transport budget',
-      );
+        _bodyReadTimeout * 3,
+      ),
+      0,
+      reason: 'bodyReadTimeout must release the transport budget',
+    );
 
-      expect(
-        _openStreams(rig.endpoint),
-        0,
-        reason: 'and it must leave nothing parked in the pipeline either',
-      );
-      expect(
-        (await _echo(rig.caller).timeout(const Duration(seconds: 10))).value,
-        'hi',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      _openStreams(rig.endpoint),
+      0,
+      reason: 'and it must leave nothing parked in the pipeline either',
+    );
+    expect(
+      (await _echo(rig.caller).timeout(const Duration(seconds: 10))).value,
+      'hi',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   test(
     'GUARD: an ordinary call still works, and clears up after itself',

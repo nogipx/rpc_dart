@@ -101,86 +101,74 @@ Future<String> _cancelInFlight({required bool hangingNotice}) async {
 void main() {
   group('cancelling a unary call does not wait for the peer notice', () {
     // WITNESS. Before the fix this never settled at all.
-    test(
-      'a notice that never completes does not hang the call',
-      () async {
-        expect(
-          await _cancelInFlight(hangingNotice: true),
-          'RpcCancelledException',
-          reason:
-              'the cancellation is a local fact; a caller must learn of it '
-              'without waiting on a network write that may never finish',
-        );
-      },
-      timeout: const Timeout(Duration(seconds: 30)),
-    );
+    test('a notice that never completes does not hang the call', () async {
+      expect(
+        await _cancelInFlight(hangingNotice: true),
+        'RpcCancelledException',
+        reason:
+            'the cancellation is a local fact; a caller must learn of it '
+            'without waiting on a network write that may never finish',
+      );
+    }, timeout: const Timeout(Duration(seconds: 30)));
 
     // CONTROL. The same path with the notice completing normally. If this had
     // failed, the witness would have been measuring the harness.
-    test(
-      'CONTROL: a notice that completes normally still cancels',
-      () async {
-        expect(
-          await _cancelInFlight(hangingNotice: false),
-          'RpcCancelledException',
-        );
-      },
-      timeout: const Timeout(Duration(seconds: 30)),
-    );
+    test('CONTROL: a notice that completes normally still cancels', () async {
+      expect(
+        await _cancelInFlight(hangingNotice: false),
+        'RpcCancelledException',
+      );
+    }, timeout: const Timeout(Duration(seconds: 30)));
 
     // GUARD for what the removed `await` was actually protecting: the stream id
     // must still be released, or it leaks against maxActiveStreams on a path
     // that never calls finishSending().
-    test(
-      'GUARD: the stream id is still released after cancelling',
-      () async {
-        final (rawClient, server) = RpcChannelTransport.pair();
-        final caller = RpcCallerEndpoint(transport: rawClient);
-        final responder = RpcResponderEndpoint(transport: server);
-        responder.registerServiceContract(_SlowService());
-        responder.start();
-        addTearDown(() async {
-          await caller.close().catchError((Object _) {});
-          await responder.close().catchError((Object _) {});
-          await rawClient.close().catchError((Object _) {});
-          await server.close().catchError((Object _) {});
-        });
+    test('GUARD: the stream id is still released after cancelling', () async {
+      final (rawClient, server) = RpcChannelTransport.pair();
+      final caller = RpcCallerEndpoint(transport: rawClient);
+      final responder = RpcResponderEndpoint(transport: server);
+      responder.registerServiceContract(_SlowService());
+      responder.start();
+      addTearDown(() async {
+        await caller.close().catchError((Object _) {});
+        await responder.close().catchError((Object _) {});
+        await rawClient.close().catchError((Object _) {});
+        await server.close().catchError((Object _) {});
+      });
 
-        final token = RpcCancellationToken();
-        unawaited(
-          caller
-              .unary<RpcString, RpcString>(
-                serviceName: 'Svc',
-                methodName: 'slow',
-                request: 'x'.rpc,
-                requestCodec: _codec,
-                responseCodec: _codec,
-                context: RpcContext.empty().withCancellation(token),
-              )
-              .catchError((Object _) => 'cancelled'.rpc),
-        );
-        await Future<void>.delayed(const Duration(milliseconds: 300));
-        token.cancel('test');
+      final token = RpcCancellationToken();
+      unawaited(
+        caller
+            .unary<RpcString, RpcString>(
+              serviceName: 'Svc',
+              methodName: 'slow',
+              request: 'x'.rpc,
+              requestCodec: _codec,
+              responseCodec: _codec,
+              context: RpcContext.empty().withCancellation(token),
+            )
+            .catchError((Object _) => 'cancelled'.rpc),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      token.cancel('test');
 
-        // Poll rather than sleep once: the release is now chained onto the notice,
-        // so it lands a microtask or two after the call returns.
-        var active = -1;
-        for (var i = 0; i < 40; i++) {
-          await Future<void>.delayed(const Duration(milliseconds: 50));
-          final health = await rawClient.health();
-          active = (health.details['activeStreams'] as int?) ?? -1;
-          if (active == 0) break;
-        }
+      // Poll rather than sleep once: the release is now chained onto the notice,
+      // so it lands a microtask or two after the call returns.
+      var active = -1;
+      for (var i = 0; i < 40; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        final health = await rawClient.health();
+        active = (health.details['activeStreams'] as int?) ?? -1;
+        if (active == 0) break;
+      }
 
-        expect(
-          active,
-          0,
-          reason:
-              'chaining the release onto the notice must still reclaim the id; '
-              'the unary path never calls finishSending(), so nothing else does',
-        );
-      },
-      timeout: const Timeout(Duration(seconds: 30)),
-    );
+      expect(
+        active,
+        0,
+        reason:
+            'chaining the release onto the notice must still reclaim the id; '
+            'the unary path never calls finishSending(), so nothing else does',
+      );
+    }, timeout: const Timeout(Duration(seconds: 30)));
   });
 }

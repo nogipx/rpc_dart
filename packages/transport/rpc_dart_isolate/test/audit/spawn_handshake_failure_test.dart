@@ -49,18 +49,14 @@ void main() {
       timeout: const Timeout(Duration(seconds: 15)),
     );
 
-    test(
-      'successful spawn still works (regression guard)',
-      () async {
-        final spawned = await RpcIsolateTransport.spawn(
-          entrypoint: idleEntrypoint,
-          isolateId: 'audit-idle',
-          startupTimeout: const Duration(seconds: 5),
-        );
-        expect(spawned.transport, isNotNull);
-        spawned.kill();
-      },
-      timeout: const Timeout(Duration(seconds: 15)),
-    );
+    test('successful spawn still works (regression guard)', () async {
+      final spawned = await RpcIsolateTransport.spawn(
+        entrypoint: idleEntrypoint,
+        isolateId: 'audit-idle',
+        startupTimeout: const Duration(seconds: 5),
+      );
+      expect(spawned.transport, isNotNull);
+      spawned.kill();
+    }, timeout: const Timeout(Duration(seconds: 15)));
   });
 }

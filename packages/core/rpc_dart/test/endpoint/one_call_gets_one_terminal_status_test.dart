@@ -102,98 +102,75 @@ _Rig _rig() {
 }
 
 void main() {
-  test(
-    'WITNESS: an unregistered method is refused exactly once',
-    () async {
+  test('WITNESS: an unregistered method is refused exactly once', () async {
+    final rig = _rig();
+    // One call first, so the connection's own setup frames are not counted.
+    await rig.call('ok');
+    rig.fromResponder.sent.clear();
+
+    expect(await rig.call('missing'), 'status ${RpcStatus.unimplemented.code}');
+
+    expect(
+      _statusFrames(rig.fromResponder),
+      1,
+      reason:
+          'three inbound frames each hit a separate binding==null site, so the '
+          'responder sent three end-of-stream trailers on one stream — a '
+          'protocol violation anywhere the peer keeps stream state. '
+          'Frames were: ${rig.fromResponder.sentFrames}',
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
+
+  group('GUARD: the ordinary outcomes are unchanged', () {
+    test('a successful call still answers, with one status', () async {
       final rig = _rig();
-      // One call first, so the connection's own setup frames are not counted.
+      await rig.call('ok');
+      rig.fromResponder.sent.clear();
+
+      expect(await rig.call('ok'), 'ok');
+      expect(_statusFrames(rig.fromResponder), 1);
+      expect(_sentData(rig.fromResponder), isTrue);
+    }, timeout: const Timeout(Duration(seconds: 30)));
+
+    test('a handler that throws still answers, with one status', () async {
+      final rig = _rig();
       await rig.call('ok');
       rig.fromResponder.sent.clear();
 
       expect(
+        await rig.call('boom'),
+        'status ${RpcStatus.permissionDenied.code}',
+      );
+      expect(_statusFrames(rig.fromResponder), 1);
+    }, timeout: const Timeout(Duration(seconds: 30)));
+
+    test('a released stream id is still reusable by a NEW call', () async {
+      // The condition removed from the guard was `_respStreams[id] == null`. What
+      // the guard still has to do is let a genuine new call — metadata WITH a
+      // methodPath — reuse an id that has been closed, while ignoring trailing
+      // frames that carry neither. Several calls in sequence exercise exactly
+      // that, because the caller reuses ids as they are released.
+      final rig = _rig();
+      for (var i = 0; i < 6; i++) {
+        expect(await rig.call('ok'), 'ok', reason: 'call $i');
+      }
+    }, timeout: const Timeout(Duration(seconds: 30)));
+
+    test('a refused call does not poison the next one on that id', () async {
+      // The sharpest version of the same risk: refuse, then call again. If the
+      // closed-set entry were never cleared, the next call would be ignored and
+      // hang to its deadline.
+      final rig = _rig();
+      expect(
         await rig.call('missing'),
         'status ${RpcStatus.unimplemented.code}',
       );
-
+      expect(await rig.call('ok'), 'ok');
       expect(
-        _statusFrames(rig.fromResponder),
-        1,
-        reason:
-            'three inbound frames each hit a separate binding==null site, so the '
-            'responder sent three end-of-stream trailers on one stream — a '
-            'protocol violation anywhere the peer keeps stream state. '
-            'Frames were: ${rig.fromResponder.sentFrames}',
+        await rig.call('missing'),
+        'status ${RpcStatus.unimplemented.code}',
       );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
-
-  group('GUARD: the ordinary outcomes are unchanged', () {
-    test(
-      'a successful call still answers, with one status',
-      () async {
-        final rig = _rig();
-        await rig.call('ok');
-        rig.fromResponder.sent.clear();
-
-        expect(await rig.call('ok'), 'ok');
-        expect(_statusFrames(rig.fromResponder), 1);
-        expect(_sentData(rig.fromResponder), isTrue);
-      },
-      timeout: const Timeout(Duration(seconds: 30)),
-    );
-
-    test(
-      'a handler that throws still answers, with one status',
-      () async {
-        final rig = _rig();
-        await rig.call('ok');
-        rig.fromResponder.sent.clear();
-
-        expect(
-          await rig.call('boom'),
-          'status ${RpcStatus.permissionDenied.code}',
-        );
-        expect(_statusFrames(rig.fromResponder), 1);
-      },
-      timeout: const Timeout(Duration(seconds: 30)),
-    );
-
-    test(
-      'a released stream id is still reusable by a NEW call',
-      () async {
-        // The condition removed from the guard was `_respStreams[id] == null`. What
-        // the guard still has to do is let a genuine new call — metadata WITH a
-        // methodPath — reuse an id that has been closed, while ignoring trailing
-        // frames that carry neither. Several calls in sequence exercise exactly
-        // that, because the caller reuses ids as they are released.
-        final rig = _rig();
-        for (var i = 0; i < 6; i++) {
-          expect(await rig.call('ok'), 'ok', reason: 'call $i');
-        }
-      },
-      timeout: const Timeout(Duration(seconds: 30)),
-    );
-
-    test(
-      'a refused call does not poison the next one on that id',
-      () async {
-        // The sharpest version of the same risk: refuse, then call again. If the
-        // closed-set entry were never cleared, the next call would be ignored and
-        // hang to its deadline.
-        final rig = _rig();
-        expect(
-          await rig.call('missing'),
-          'status ${RpcStatus.unimplemented.code}',
-        );
-        expect(await rig.call('ok'), 'ok');
-        expect(
-          await rig.call('missing'),
-          'status ${RpcStatus.unimplemented.code}',
-        );
-        expect(await rig.call('ok'), 'ok');
-      },
-      timeout: const Timeout(Duration(seconds: 30)),
-    );
+      expect(await rig.call('ok'), 'ok');
+    }, timeout: const Timeout(Duration(seconds: 30)));
   });
 }

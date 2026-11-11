@@ -212,19 +212,15 @@ void main() {
 
   // GUARD: an ordinary drop. Dropping `cancelOnError` must not cost the
   // reconnect the proxy exists for.
-  test(
-    'GUARD: a peer that goes away is still replaced',
-    () async {
-      final rig = await _rig();
-      await _startCall(rig.caller);
+  test('GUARD: a peer that goes away is still replaced', () async {
+    final rig = await _rig();
+    await _startCall(rig.caller);
 
-      await rig.killPeer();
-      await Future<void>.delayed(const Duration(seconds: 2));
+    await rig.killPeer();
+    await Future<void>.delayed(const Duration(seconds: 2));
 
-      expect(rig.built(), 2);
-      final b = await _startCall(rig.caller);
-      expect(b.got, isNotEmpty, reason: 'the replacement has to serve calls');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(rig.built(), 2);
+    final b = await _startCall(rig.caller);
+    expect(b.got, isNotEmpty, reason: 'the replacement has to serve calls');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

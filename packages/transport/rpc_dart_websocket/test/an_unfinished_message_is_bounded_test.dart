@@ -86,38 +86,34 @@ Future<int?> _flood(int port, {required int fragments}) async {
 }
 
 void main() {
-  test(
-    'an unfinished message is refused past maxMessageLengthBytes',
-    () async {
-      const policy = RpcSecurityPolicy(maxMessageLengthBytes: _fragment);
-      final http = await HttpServer.bind('127.0.0.1', 0);
-      final server = RpcWebSocketServer(
-        connections: rpcWebSocketConnections(http, policy: policy),
-        policy: policy,
-        mode: RpcResponderMode((_) {}),
-      );
-      await server.start();
-      addTearDown(() async {
-        await server.stop();
-        await http.close(force: true);
-      });
+  test('an unfinished message is refused past maxMessageLengthBytes', () async {
+    const policy = RpcSecurityPolicy(maxMessageLengthBytes: _fragment);
+    final http = await HttpServer.bind('127.0.0.1', 0);
+    final server = RpcWebSocketServer(
+      connections: rpcWebSocketConnections(http, policy: policy),
+      policy: policy,
+      mode: RpcResponderMode((_) {}),
+    );
+    await server.start();
+    addTearDown(() async {
+      await server.stop();
+      await http.close(force: true);
+    });
 
-      final rssBefore = ProcessInfo.currentRss;
-      final closedAfter = await _flood(http.port, fragments: 64);
-      final grown = (ProcessInfo.currentRss - rssBefore) ~/ (1024 * 1024);
-      expect(
-        closedAfter,
-        isNotNull,
-        reason: '64 MiB of one message buffered, RSS +$grown MiB',
-      );
-      // The server refuses the second fragment, which crosses the ceiling. The
-      // CLIENT learns of it a few writes later, by how long the close takes to
-      // reach it, so this bounds what was sent, not when it was noticed: far
-      // below the 64 an unbounded server accepts without closing at all.
-      expect(closedAfter, lessThanOrEqualTo(8), reason: 'RSS +$grown MiB');
-    },
-    timeout: const Timeout(Duration(minutes: 2)),
-  );
+    final rssBefore = ProcessInfo.currentRss;
+    final closedAfter = await _flood(http.port, fragments: 64);
+    final grown = (ProcessInfo.currentRss - rssBefore) ~/ (1024 * 1024);
+    expect(
+      closedAfter,
+      isNotNull,
+      reason: '64 MiB of one message buffered, RSS +$grown MiB',
+    );
+    // The server refuses the second fragment, which crosses the ceiling. The
+    // CLIENT learns of it a few writes later, by how long the close takes to
+    // reach it, so this bounds what was sent, not when it was noticed: far
+    // below the 64 an unbounded server accepts without closing at all.
+    expect(closedAfter, lessThanOrEqualTo(8), reason: 'RSS +$grown MiB');
+  }, timeout: const Timeout(Duration(minutes: 2)));
 
   // Bytes that arrive in the same read as the upgrade request are replayed by
   // dart:http after the refusal, so the refused socket keeps delivering.

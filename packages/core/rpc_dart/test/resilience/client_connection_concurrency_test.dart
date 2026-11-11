@@ -150,73 +150,57 @@ void main() {
     return produced.where((t) => !t.isClosed).length;
   }
 
-  test(
-    'CONTROL: connect then dispose leaves nothing open',
-    () async {
-      expect(await orphansAfter((_) async {}), 0);
-      expect(produced, hasLength(1));
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('CONTROL: connect then dispose leaves nothing open', () async {
+    expect(await orphansAfter((_) async {}), 0);
+    expect(produced, hasLength(1));
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'concurrent forceReconnect() does not orphan a transport',
-    () async {
-      // The sibling bug was one orphan per EXTRA concurrent attempt, so four
-      // callers would have left three behind.
-      final orphans = await orphansAfter((c) async {
-        c
-          ..forceReconnect()
-          ..forceReconnect()
-          ..forceReconnect()
-          ..forceReconnect();
-      });
+  test('concurrent forceReconnect() does not orphan a transport', () async {
+    // The sibling bug was one orphan per EXTRA concurrent attempt, so four
+    // callers would have left three behind.
+    final orphans = await orphansAfter((c) async {
+      c
+        ..forceReconnect()
+        ..forceReconnect()
+        ..forceReconnect()
+        ..forceReconnect();
+    });
 
-      expect(
-        orphans,
-        0,
-        reason:
-            'every transport the factory produced must be closed; the sibling '
-            'transports leaked one per extra concurrent attempt',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      orphans,
+      0,
+      reason:
+          'every transport the factory produced must be closed; the sibling '
+          'transports leaked one per extra concurrent attempt',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'a peer drop racing forceReconnect() does not orphan',
-    () async {
-      // _onTransportDropped clears _connectingGuard on purpose, so this is the
-      // path where an overlapping loop would be created if one could be.
-      final orphans = await orphansAfter((c) async {
-        final current = produced.isNotEmpty ? produced.last : null;
-        c.forceReconnect();
-        current?.dropFromPeer();
-        c.forceReconnect();
-      });
+  test('a peer drop racing forceReconnect() does not orphan', () async {
+    // _onTransportDropped clears _connectingGuard on purpose, so this is the
+    // path where an overlapping loop would be created if one could be.
+    final orphans = await orphansAfter((c) async {
+      final current = produced.isNotEmpty ? produced.last : null;
+      c.forceReconnect();
+      current?.dropFromPeer();
+      c.forceReconnect();
+    });
 
-      expect(orphans, 0);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(orphans, 0);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'repeated peer drops do not orphan',
-    () async {
-      final orphans = await orphansAfter((c) async {
-        for (var i = 0; i < 4; i++) {
-          if (produced.isNotEmpty) produced.last.dropFromPeer();
-          await Future<void>.delayed(const Duration(milliseconds: 60));
-        }
-      });
+  test('repeated peer drops do not orphan', () async {
+    final orphans = await orphansAfter((c) async {
+      for (var i = 0; i < 4; i++) {
+        if (produced.isNotEmpty) produced.last.dropFromPeer();
+        await Future<void>.delayed(const Duration(milliseconds: 60));
+      }
+    });
 
-      expect(orphans, 0);
-      expect(
-        produced.length,
-        greaterThan(1),
-        reason: 'the drops must actually have caused reconnects',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(orphans, 0);
+    expect(
+      produced.length,
+      greaterThan(1),
+      reason: 'the drops must actually have caused reconnects',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

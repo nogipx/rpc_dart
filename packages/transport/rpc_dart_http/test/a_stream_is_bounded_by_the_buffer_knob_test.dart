@@ -102,26 +102,18 @@ const _raisedBytes = RpcSecurityPolicy(
 );
 
 void main() {
-  test(
-    'WITNESS: maxBufferedBytes raises what one stream may total',
-    () async {
-      final out = await _stream(
-        count: 20,
-        size: 32 * 1024,
-        policy: _raisedBytes,
-      );
+  test('WITNESS: maxBufferedBytes raises what one stream may total', () async {
+    final out = await _stream(count: 20, size: 32 * 1024, policy: _raisedBytes);
 
-      expect(
-        out.error,
-        isNull,
-        reason:
-            'the body is bounded by the per-MESSAGE limit, so the knob that '
-            'means "buffered bytes" bounds nothing here',
-      );
-      expect(out.received, 20);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      out.error,
+      isNull,
+      reason:
+          'the body is bounded by the per-MESSAGE limit, so the knob that '
+          'means "buffered bytes" bounds nothing here',
+    );
+    expect(out.received, 20);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   test(
     'CONTROL: the DEFAULT is unchanged — the same stream still fails',
@@ -141,53 +133,41 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
-  test(
-    'CONTROL: a stream inside both ceilings is unaffected',
-    () async {
-      final out = await _stream(count: 4, size: 32 * 1024, policy: _small);
+  test('CONTROL: a stream inside both ceilings is unaffected', () async {
+    final out = await _stream(count: 4, size: 32 * 1024, policy: _small);
 
-      expect(out.error, isNull);
-      expect(out.received, 4);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(out.error, isNull);
+    expect(out.received, 4);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   // GUARD: there are TWO ceilings, which is the part of the class doc a reader
   // most needs. Bytes raised alone does not lift the message COUNT, because the
   // body reaches the parser as one chunk.
-  test(
-    'GUARD: raising bytes alone does not lift the message count',
-    () async {
-      final out = await _stream(count: 1500, size: 10, policy: _raisedBytes);
+  test('GUARD: raising bytes alone does not lift the message count', () async {
+    final out = await _stream(count: 1500, size: 10, policy: _raisedBytes);
 
-      expect(
-        out.error,
-        isA<RpcStatusException>().having(
-          (e) => e.statusCode,
-          'statusCode',
-          RpcStatus.resourceExhausted,
-        ),
-        reason: 'maxMessagesPerChunk is the other ceiling and is raised alone',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      out.error,
+      isA<RpcStatusException>().having(
+        (e) => e.statusCode,
+        'statusCode',
+        RpcStatus.resourceExhausted,
+      ),
+      reason: 'maxMessagesPerChunk is the other ceiling and is raised alone',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD: raising the count knob lifts it',
-    () async {
-      final out = await _stream(
-        count: 1500,
-        size: 10,
-        policy: const RpcSecurityPolicy(
-          maxMessageLengthBytes: 256 * 1024,
-          maxMessagesPerChunk: 100000,
-        ),
-      );
+  test('GUARD: raising the count knob lifts it', () async {
+    final out = await _stream(
+      count: 1500,
+      size: 10,
+      policy: const RpcSecurityPolicy(
+        maxMessageLengthBytes: 256 * 1024,
+        maxMessagesPerChunk: 100000,
+      ),
+    );
 
-      expect(out.error, isNull);
-      expect(out.received, 1500);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(out.error, isNull);
+    expect(out.received, 1500);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

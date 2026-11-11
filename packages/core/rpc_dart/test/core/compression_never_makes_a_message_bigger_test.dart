@@ -139,50 +139,38 @@ void main() {
   });
 
   group('GUARD: real savings are still taken', () {
-    test(
-      'a large incompressible message is still compressed',
-      () async {
-        final text = _incompressible(4096);
-        final off = await _frameSize(text, compress: false);
-        final on = await _frameSize(text, compress: true);
+    test('a large incompressible message is still compressed', () async {
+      final text = _incompressible(4096);
+      final off = await _frameSize(text, compress: false);
+      final on = await _frameSize(text, compress: true);
 
-        expect(
-          on,
-          lessThan(off),
-          reason: 'refusing to compress anything would also pass the witness',
-        );
-      },
-      timeout: const Timeout(Duration(seconds: 30)),
-    );
+      expect(
+        on,
+        lessThan(off),
+        reason: 'refusing to compress anything would also pass the witness',
+      );
+    }, timeout: const Timeout(Duration(seconds: 30)));
 
-    test(
-      'a SMALL compressible message is still compressed',
-      () async {
-        // The arm that distinguishes compare-and-keep-smaller from a size
-        // threshold. A 256-byte threshold would send this one plain and lose a
-        // real saving; comparing keeps it.
-        final text = 'a' * 32;
-        final off = await _frameSize(text, compress: false);
-        final on = await _frameSize(text, compress: true);
+    test('a SMALL compressible message is still compressed', () async {
+      // The arm that distinguishes compare-and-keep-smaller from a size
+      // threshold. A 256-byte threshold would send this one plain and lose a
+      // real saving; comparing keeps it.
+      final text = 'a' * 32;
+      final off = await _frameSize(text, compress: false);
+      final on = await _frameSize(text, compress: true);
 
-        expect(
-          on,
-          lessThan(off),
-          reason:
-              'gzip beats plain even at 32 bytes when the bytes repeat, and a size '
-              'threshold would have thrown that away',
-        );
-      },
-      timeout: const Timeout(Duration(seconds: 30)),
-    );
+      expect(
+        on,
+        lessThan(off),
+        reason:
+            'gzip beats plain even at 32 bytes when the bytes repeat, and a size '
+            'threshold would have thrown that away',
+      );
+    }, timeout: const Timeout(Duration(seconds: 30)));
 
-    test(
-      'compression disabled sends exactly the plain bytes',
-      () async {
-        final text = _incompressible(4096);
-        expect(await _frameSize(text, compress: false), greaterThan(4096));
-      },
-      timeout: const Timeout(Duration(seconds: 30)),
-    );
+    test('compression disabled sends exactly the plain bytes', () async {
+      final text = _incompressible(4096);
+      expect(await _frameSize(text, compress: false), greaterThan(4096));
+    }, timeout: const Timeout(Duration(seconds: 30)));
   });
 }

@@ -124,25 +124,21 @@ void main() {
   // CONTROL: a caller who already has a native ping can still say so, and ours
   // must stay off — otherwise the fix doubles the keepalive for everyone who
   // built the socket properly.
-  test(
-    'CONTROL: platformHandlesPing: true still switches ours off',
-    () async {
-      final server = await _silentServer();
-      final transport = RpcWebSocketCallerTransport(
-        await _handBuilt(server),
-        pingInterval: interval,
-        platformHandlesPing: true,
-      );
-      transport.incomingMessages.listen((_) {}, onError: (Object _) {});
-      addTearDown(() => transport.close().catchError((Object _) {}));
+  test('CONTROL: platformHandlesPing: true still switches ours off', () async {
+    final server = await _silentServer();
+    final transport = RpcWebSocketCallerTransport(
+      await _handBuilt(server),
+      pingInterval: interval,
+      platformHandlesPing: true,
+    );
+    transport.incomingMessages.listen((_) {}, onError: (Object _) {});
+    addTearDown(() => transport.close().catchError((Object _) {}));
 
-      expect(
-        await _timeToNotice(transport, cap: const Duration(seconds: 2)),
-        isNull,
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      await _timeToNotice(transport, cap: const Duration(seconds: 2)),
+      isNull,
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   // CONTROL, and the one that bounds the fix: `connect()` must still NOT run
   // this library's ping. It goes through `openWebSocket`, so on the VM dart:io

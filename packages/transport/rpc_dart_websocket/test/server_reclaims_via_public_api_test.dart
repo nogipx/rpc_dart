@@ -169,63 +169,51 @@ void main() {
     }
   }
 
-  test(
-    'keepalive makes the server reclaim a stranded connection',
-    () async {
-      await boot(pingInterval: const Duration(seconds: 2));
+  test('keepalive makes the server reclaim a stranded connection', () async {
+    await boot(pingInterval: const Duration(seconds: 2));
 
-      relay.frozen = true; // network dies; nothing is closed on either side
-      await pollUntil(() => server.endpoints.isEmpty && _disposed == 3);
+    relay.frozen = true; // network dies; nothing is closed on either side
+    await pollUntil(() => server.endpoints.isEmpty && _disposed == 3);
 
-      expect(
-        server.endpoints,
-        isEmpty,
-        reason:
-            'the ping timeout must produce the sink.done that '
-            'RpcWebSocketServer reclaims on -- if it does not, the keepalive '
-            'helper is useless with the very server it exists to serve',
-      );
-      expect(
-        _disposed,
-        3,
-        reason: 'the contracts on those endpoints must be disposed',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 120)),
-  );
+    expect(
+      server.endpoints,
+      isEmpty,
+      reason:
+          'the ping timeout must produce the sink.done that '
+          'RpcWebSocketServer reclaims on -- if it does not, the keepalive '
+          'helper is useless with the very server it exists to serve',
+    );
+    expect(
+      _disposed,
+      3,
+      reason: 'the contracts on those endpoints must be disposed',
+    );
+  }, timeout: const Timeout(Duration(seconds: 120)));
 
-  test(
-    'CONTROL: without keepalive the connections are held',
-    () async {
-      await boot();
+  test('CONTROL: without keepalive the connections are held', () async {
+    await boot();
 
-      relay.frozen = true;
-      await pollUntil(
-        () => server.endpoints.isEmpty,
-        budget: const Duration(seconds: 10),
-      );
+    relay.frozen = true;
+    await pollUntil(
+      () => server.endpoints.isEmpty,
+      budget: const Duration(seconds: 10),
+    );
 
-      expect(server.endpoints, hasLength(3));
-      expect(_disposed, 0);
-    },
-    timeout: const Timeout(Duration(seconds: 120)),
-  );
+    expect(server.endpoints, hasLength(3));
+    expect(_disposed, 0);
+  }, timeout: const Timeout(Duration(seconds: 120)));
 
-  test(
-    'GUARD: a clean disconnect still reclaims',
-    () async {
-      // The path sink.done was always wired for; keepalive must not be required
-      // for the ordinary case.
-      await boot();
+  test('GUARD: a clean disconnect still reclaims', () async {
+    // The path sink.done was always wired for; keepalive must not be required
+    // for the ordinary case.
+    await boot();
 
-      for (final t in transports) {
-        await t.close().catchError((Object _) {});
-      }
-      await pollUntil(() => server.endpoints.isEmpty && _disposed == 3);
+    for (final t in transports) {
+      await t.close().catchError((Object _) {});
+    }
+    await pollUntil(() => server.endpoints.isEmpty && _disposed == 3);
 
-      expect(server.endpoints, isEmpty);
-      expect(_disposed, 3);
-    },
-    timeout: const Timeout(Duration(seconds: 120)),
-  );
+    expect(server.endpoints, isEmpty);
+    expect(_disposed, 3);
+  }, timeout: const Timeout(Duration(seconds: 120)));
 }

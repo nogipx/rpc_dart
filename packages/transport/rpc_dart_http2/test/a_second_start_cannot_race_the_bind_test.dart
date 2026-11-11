@@ -78,35 +78,27 @@ Future<_Run> _start({required int starts}) async {
 }
 
 void main() {
-  test(
-    'CONTROL one start() binds and releases',
-    () async {
-      final r = await _start(starts: 1);
+  test('CONTROL one start() binds and releases', () async {
+    final r = await _start(starts: 1);
 
-      expect(r.isRunning, isTrue);
-      expect(r.portFreeAfterStop, isTrue);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(r.isRunning, isTrue);
+    expect(r.portFreeAfterStop, isTrue);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'WITNESS two concurrent starts leave nothing bound',
-    () async {
-      final r = await _start(starts: 2);
+  test('WITNESS two concurrent starts leave nothing bound', () async {
+    final r = await _start(starts: 2);
 
-      expect(
-        r.isRunning,
-        isTrue,
-        reason: "the loser's catch cleared the flag the winner had just set",
-      );
-      expect(
-        r.portFreeAfterStop,
-        isTrue,
-        reason:
-            'stop() gives up on !isRunning, so a cleared flag left the listener '
-            'bound for the life of the process',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      r.isRunning,
+      isTrue,
+      reason: "the loser's catch cleared the flag the winner had just set",
+    );
+    expect(
+      r.portFreeAfterStop,
+      isTrue,
+      reason:
+          'stop() gives up on !isRunning, so a cleared flag left the listener '
+          'bound for the life of the process',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

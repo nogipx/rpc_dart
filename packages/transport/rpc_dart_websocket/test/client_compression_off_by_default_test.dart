@@ -69,37 +69,29 @@ void main() {
     );
   }
 
-  test(
-    'the client does not offer permessage-deflate by default',
-    () async {
-      final offered = await offeredExtensionsFor(
-        (uri) => RpcWebSocketCallerTransport.connect(uri),
-      );
-      expect(
-        offered ?? '',
-        isNot(contains('permessage-deflate')),
-        reason:
-            'the client offered permessage-deflate, so a hostile server could '
-            'negotiate it and flood the client: a few hundred KiB on the wire '
-            'inflates to hundreds of MiB of RSS before any rpc_dart limit sees it',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+  test('the client does not offer permessage-deflate by default', () async {
+    final offered = await offeredExtensionsFor(
+      (uri) => RpcWebSocketCallerTransport.connect(uri),
+    );
+    expect(
+      offered ?? '',
+      isNot(contains('permessage-deflate')),
+      reason:
+          'the client offered permessage-deflate, so a hostile server could '
+          'negotiate it and flood the client: a few hundred KiB on the wire '
+          'inflates to hundreds of MiB of RSS before any rpc_dart limit sees it',
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
-  test(
-    'GUARD: opting compression back in offers it',
-    () async {
-      // Proves the parameter still works against servers you control, and that
-      // the witness is really keyed on the offer rather than always absent.
-      final offered = await offeredExtensionsFor(
-        (uri) =>
-            RpcWebSocketCallerTransport.connect(uri, enableCompression: true),
-      );
-      expect(offered ?? '', contains('permessage-deflate'));
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+  test('GUARD: opting compression back in offers it', () async {
+    // Proves the parameter still works against servers you control, and that
+    // the witness is really keyed on the offer rather than always absent.
+    final offered = await offeredExtensionsFor(
+      (uri) =>
+          RpcWebSocketCallerTransport.connect(uri, enableCompression: true),
+    );
+    expect(offered ?? '', contains('permessage-deflate'));
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
   test(
     'GUARD: an ordinary RPC call works with client compression off',

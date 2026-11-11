@@ -27,50 +27,46 @@ const _codec = RpcCodec(RpcString.fromJson);
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets(
-    'a guest awaiting a native promise resumes',
-    (_) async {
-      final wasm = (await rootBundle.load(
-        'assets/guest.wasm',
-      )).buffer.asUint8List();
-      final mjs = await rootBundle.loadString('assets/guest.mjs');
-      final bridge = await RpcFlutterWasmBridge.load(
-        wasmBytes: wasm,
-        mjsCode: mjs,
-      ).timeout(const Duration(seconds: 60));
-      final caller = RpcCallerEndpoint(
-        transport: RpcWasmTransport.fromBridge(bridge: bridge, isClient: true),
-      );
+  testWidgets('a guest awaiting a native promise resumes', (_) async {
+    final wasm = (await rootBundle.load(
+      'assets/guest.wasm',
+    )).buffer.asUint8List();
+    final mjs = await rootBundle.loadString('assets/guest.mjs');
+    final bridge = await RpcFlutterWasmBridge.load(
+      wasmBytes: wasm,
+      mjsCode: mjs,
+    ).timeout(const Duration(seconds: 60));
+    final caller = RpcCallerEndpoint(
+      transport: RpcWasmTransport.fromBridge(bridge: bridge, isClient: true),
+    );
 
-      final clock = Stopwatch()..start();
-      String answer;
-      try {
-        answer =
-            (await caller
-                    .unary<RpcString, RpcString>(
-                      serviceName: 'Echo',
-                      methodName: 'AfterPromise',
-                      request: '100'.rpc,
-                      requestCodec: _codec,
-                      responseCodec: _codec,
-                    )
-                    .timeout(const Duration(seconds: 10)))
-                .value;
-      } catch (e) {
-        answer = 'ERR ${e.runtimeType}';
-      }
-      // ignore: avoid_print
-      print(
-        'platform: ${Platform.operatingSystem}  answer: $answer  '
-        'after ${clock.elapsedMilliseconds}ms',
-      );
+    final clock = Stopwatch()..start();
+    String answer;
+    try {
+      answer =
+          (await caller
+                  .unary<RpcString, RpcString>(
+                    serviceName: 'Echo',
+                    methodName: 'AfterPromise',
+                    request: '100'.rpc,
+                    requestCodec: _codec,
+                    responseCodec: _codec,
+                  )
+                  .timeout(const Duration(seconds: 10)))
+              .value;
+    } catch (e) {
+      answer = 'ERR ${e.runtimeType}';
+    }
+    // ignore: avoid_print
+    print(
+      'platform: ${Platform.operatingSystem}  answer: $answer  '
+      'after ${clock.elapsedMilliseconds}ms',
+    );
 
-      expect(answer, startsWith('resumed 100 in'));
-      expect(clock.elapsedMilliseconds, lessThan(2000));
+    expect(answer, startsWith('resumed 100 in'));
+    expect(clock.elapsedMilliseconds, lessThan(2000));
 
-      await caller.close();
-      await bridge.close();
-    },
-    timeout: const Timeout(Duration(minutes: 2)),
-  );
+    await caller.close();
+    await bridge.close();
+  }, timeout: const Timeout(Duration(minutes: 2)));
 }

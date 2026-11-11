@@ -201,48 +201,44 @@ void main() {
       },
     );
 
-    test(
-      'reconnects after connection drop and re-delivers events',
-      () async {
-        const topic = 'reconnect-test';
-        final received = <String>[];
+    test('reconnects after connection drop and re-delivers events', () async {
+      const topic = 'reconnect-test';
+      final received = <String>[];
 
-        repo
-            .subscribe('client-1', topic)
-            .listen((e) => received.add(e.payload['v'] as String));
-        await Future<void>.delayed(const Duration(milliseconds: 50));
+      repo
+          .subscribe('client-1', topic)
+          .listen((e) => received.add(e.payload['v'] as String));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
 
-        // Open a separate admin connection and kill all other idle connections
-        // to simulate a postgres connection drop.
-        final admin = await Connection.open(_endpoint, settings: _settings);
-        try {
-          await admin.execute(
-            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
-            "WHERE datname = current_database() "
-            "AND pid != pg_backend_pid() "
-            "AND state = 'idle'",
-          );
-        } finally {
-          await admin.close();
-        }
-
-        // Wait for: health check (200ms) + reconnect delay (1s) + connection time.
-        await Future<void>.delayed(const Duration(milliseconds: 1500));
-
-        // Publish from a fresh repo — the reconnected repo should receive it.
-        final publisher = await PostgresNotifyRepository.connect(
-          endpoint: _endpoint,
-          settings: _settings,
+      // Open a separate admin connection and kill all other idle connections
+      // to simulate a postgres connection drop.
+      final admin = await Connection.open(_endpoint, settings: _settings);
+      try {
+        await admin.execute(
+          "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+          "WHERE datname = current_database() "
+          "AND pid != pg_backend_pid() "
+          "AND state = 'idle'",
         );
-        try {
-          publisher.publish(topic, {'v': 'after-reconnect'});
-          await Future<void>.delayed(const Duration(milliseconds: 300));
-          expect(received, ['after-reconnect']);
-        } finally {
-          await publisher.dispose();
-        }
-      },
-      timeout: const Timeout(Duration(seconds: 10)),
-    );
+      } finally {
+        await admin.close();
+      }
+
+      // Wait for: health check (200ms) + reconnect delay (1s) + connection time.
+      await Future<void>.delayed(const Duration(milliseconds: 1500));
+
+      // Publish from a fresh repo — the reconnected repo should receive it.
+      final publisher = await PostgresNotifyRepository.connect(
+        endpoint: _endpoint,
+        settings: _settings,
+      );
+      try {
+        publisher.publish(topic, {'v': 'after-reconnect'});
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        expect(received, ['after-reconnect']);
+      } finally {
+        await publisher.dispose();
+      }
+    }, timeout: const Timeout(Duration(seconds: 10)));
   });
 }

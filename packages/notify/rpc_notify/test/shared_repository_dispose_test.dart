@@ -145,11 +145,9 @@ void main() {
             'the subscriber was handed the repository, it did not create it; '
             'disposing a borrowed singleton kills every other holder',
       );
-      expect(
-        shared.unsubscribed,
-        ['vault:x'],
-        reason: 'its own subscription must still be released, or it leaks',
-      );
+      expect(shared.unsubscribed, [
+        'vault:x',
+      ], reason: 'its own subscription must still be released, or it leaks');
     });
 
     test('an owning subscriber still disposes the repository', () async {

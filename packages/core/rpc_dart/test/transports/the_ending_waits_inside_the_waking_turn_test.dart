@@ -116,11 +116,11 @@ void main() {
 
     final parked = rig.transport.sendMessage(rig.id, Uint8List(_window));
     await Future<void>.delayed(Duration.zero);
-    expect(
-      rig.channel.sent,
-      ['meta', 'meta', 'data($_window)'],
-      reason: 'the second frame must still be parked, or there is no window',
-    );
+    expect(rig.channel.sent, [
+      'meta',
+      'meta',
+      'data($_window)',
+    ], reason: 'the second frame must still be parked, or there is no window');
 
     // THE TURN: both grants land synchronously, so the waiter is completed and
     // its continuation queued before these return.

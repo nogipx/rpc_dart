@@ -46,64 +46,56 @@ Uint8List _forgedIsize({int declares = 4096}) {
 }
 
 void main() {
-  test(
-    'a payload whose ISIZE understates it is refused on every runtime',
-    () {
-      final bomb = _forgedIsize();
+  test('a payload whose ISIZE understates it is refused on every runtime', () {
+    final bomb = _forgedIsize();
 
-      // The pre-check must not be what saves us, or the test proves nothing about
-      // the path after it.
-      final n = bomb.length;
-      final declared =
-          bomb[n - 4] |
-          (bomb[n - 3] << 8) |
-          (bomb[n - 2] << 16) |
-          (bomb[n - 1] << 24);
-      expect(
-        declared,
-        lessThan(_limit),
-        reason: 'the bomb must look harmless to a trailer-based pre-check',
-      );
+    // The pre-check must not be what saves us, or the test proves nothing about
+    // the path after it.
+    final n = bomb.length;
+    final declared =
+        bomb[n - 4] |
+        (bomb[n - 3] << 8) |
+        (bomb[n - 2] << 16) |
+        (bomb[n - 1] << 24);
+    expect(
+      declared,
+      lessThan(_limit),
+      reason: 'the bomb must look harmless to a trailer-based pre-check',
+    );
 
-      final codec = RpcGzipCodec();
-      final sw = Stopwatch()..start();
-      expect(
-        () => codec.decompress(bomb, maxOutputBytes: _limit),
-        throwsA(
-          isA<RpcStatusException>().having(
-            (e) => e.statusCode,
-            'statusCode',
-            RpcStatus.resourceExhausted,
-          ),
+    final codec = RpcGzipCodec();
+    final sw = Stopwatch()..start();
+    expect(
+      () => codec.decompress(bomb, maxOutputBytes: _limit),
+      throwsA(
+        isA<RpcStatusException>().having(
+          (e) => e.statusCode,
+          'statusCode',
+          RpcStatus.resourceExhausted,
         ),
-        reason: 'over the limit is over the limit, on the VM and on dart2js',
-      );
-      sw.stop();
+      ),
+      reason: 'over the limit is over the limit, on the VM and on dart2js',
+    );
+    sw.stop();
 
-      // Reported rather than asserted: the VM aborts mid-inflate and web cannot,
-      // so a threshold here would pin the platform difference instead of the
-      // contract. The number is what B-29 wanted measured.
-      // ignore: avoid_print
-      print(
-        'isize-understated decompress refused in ${sw.elapsedMilliseconds} ms '
-        '(declared $declared, real $_realOutput, limit $_limit)',
-      );
-    },
-    timeout: const Timeout(Duration(minutes: 3)),
-  );
+    // Reported rather than asserted: the VM aborts mid-inflate and web cannot,
+    // so a threshold here would pin the platform difference instead of the
+    // contract. The number is what B-29 wanted measured.
+    // ignore: avoid_print
+    print(
+      'isize-understated decompress refused in ${sw.elapsedMilliseconds} ms '
+      '(declared $declared, real $_realOutput, limit $_limit)',
+    );
+  }, timeout: const Timeout(Duration(minutes: 3)));
 
-  test(
-    'GUARD: an honest payload inside the limit still round-trips',
-    () {
-      // Without this the witness would pass on a codec that refused everything.
-      final codec = RpcGzipCodec();
-      final data = Uint8List(1024 * 1024);
-      final round = codec.decompress(
-        codec.compress(data),
-        maxOutputBytes: _limit,
-      );
-      expect(round.length, data.length);
-    },
-    timeout: const Timeout(Duration(minutes: 3)),
-  );
+  test('GUARD: an honest payload inside the limit still round-trips', () {
+    // Without this the witness would pass on a codec that refused everything.
+    final codec = RpcGzipCodec();
+    final data = Uint8List(1024 * 1024);
+    final round = codec.decompress(
+      codec.compress(data),
+      maxOutputBytes: _limit,
+    );
+    expect(round.length, data.length);
+  }, timeout: const Timeout(Duration(minutes: 3)));
 }

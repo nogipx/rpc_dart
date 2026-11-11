@@ -186,58 +186,54 @@ Future<void> _probe({
 }
 
 void main() {
-  test(
-    'a sender over a real, latent socket',
-    () async {
-      for (final rtt in [
-        Duration.zero,
-        const Duration(milliseconds: 40),
-        const Duration(milliseconds: 200),
-      ]) {
-        await _probe(
-          label: '6.0.0 defaults, rtt ${rtt.inMilliseconds}ms',
-          rtt: rtt,
-          perFrameDelay: const Duration(milliseconds: 150),
-          policy: const RpcSecurityPolicy(),
-        );
-      }
-      // The case that matters most: a blob so small that the PARKED frame is the
-      // last one, so the stream ends while it is still waiting. A one-frame blob
-      // is the shape the consumer's server reported as "the stream carried no
-      // frames at all".
-      for (final count in [1, 2, 3]) {
-        await _probe(
-          label: '6.0.0 defaults, rtt 200ms, $count frame(s)',
-          rtt: const Duration(milliseconds: 200),
-          perFrameDelay: const Duration(milliseconds: 150),
-          policy: const RpcSecurityPolicy(),
-          count: count,
-        );
-      }
-      for (final count in [1, 2, 3]) {
-        await _probe(
-          label: '5.0.1 shape,   rtt 200ms, $count frame(s)',
-          rtt: const Duration(milliseconds: 200),
-          perFrameDelay: const Duration(milliseconds: 150),
-          policy: const RpcSecurityPolicy(
-            initialSendWindowBytes: null,
-            initialSendWindowGrace: null,
-          ),
-          count: count,
-        );
-      }
-
-      // The 5.0.1 shape: no initial send window existed at all.
+  test('a sender over a real, latent socket', () async {
+    for (final rtt in [
+      Duration.zero,
+      const Duration(milliseconds: 40),
+      const Duration(milliseconds: 200),
+    ]) {
       await _probe(
-        label: '5.0.1 shape, rtt 200ms',
+        label: '6.0.0 defaults, rtt ${rtt.inMilliseconds}ms',
+        rtt: rtt,
+        perFrameDelay: const Duration(milliseconds: 150),
+        policy: const RpcSecurityPolicy(),
+      );
+    }
+    // The case that matters most: a blob so small that the PARKED frame is the
+    // last one, so the stream ends while it is still waiting. A one-frame blob
+    // is the shape the consumer's server reported as "the stream carried no
+    // frames at all".
+    for (final count in [1, 2, 3]) {
+      await _probe(
+        label: '6.0.0 defaults, rtt 200ms, $count frame(s)',
+        rtt: const Duration(milliseconds: 200),
+        perFrameDelay: const Duration(milliseconds: 150),
+        policy: const RpcSecurityPolicy(),
+        count: count,
+      );
+    }
+    for (final count in [1, 2, 3]) {
+      await _probe(
+        label: '5.0.1 shape,   rtt 200ms, $count frame(s)',
         rtt: const Duration(milliseconds: 200),
         perFrameDelay: const Duration(milliseconds: 150),
         policy: const RpcSecurityPolicy(
           initialSendWindowBytes: null,
           initialSendWindowGrace: null,
         ),
+        count: count,
       );
-    },
-    timeout: const Timeout(Duration(minutes: 5)),
-  );
+    }
+
+    // The 5.0.1 shape: no initial send window existed at all.
+    await _probe(
+      label: '5.0.1 shape, rtt 200ms',
+      rtt: const Duration(milliseconds: 200),
+      perFrameDelay: const Duration(milliseconds: 150),
+      policy: const RpcSecurityPolicy(
+        initialSendWindowBytes: null,
+        initialSendWindowGrace: null,
+      ),
+    );
+  }, timeout: const Timeout(Duration(minutes: 5)));
 }

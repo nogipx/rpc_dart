@@ -279,52 +279,40 @@ Future<String> _unary({
 }
 
 void main() {
-  test(
-    'WITNESS a fragmented request is answered',
-    () async {
-      expect(
-        await _unary(split: true),
-        'got:64',
-        reason:
-            'one transport message carried half a gRPC frame, and unary claimed '
-            'the request before parsing it',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('WITNESS a fragmented request is answered', () async {
+    expect(
+      await _unary(split: true),
+      'got:64',
+      reason:
+          'one transport message carried half a gRPC frame, and unary claimed '
+          'the request before parsing it',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'a peer that stops mid-frame gets a STATUS, not a hang',
-    () async {
-      // The failure the fix can introduce, and the reason round 518's partial
-      // version was reverted. INTERNAL names bytes lost in transit, as grpc-go
-      // answers them; DEADLINE_EXCEEDED (status 4) would mean the call was
-      // left waiting.
-      expect(
-        await _unary(split: true, truncate: true),
-        startsWith('status ${RpcStatus.internal.code}'),
-        reason: 'an incomplete frame that is merely awaited is a hang',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('a peer that stops mid-frame gets a STATUS, not a hang', () async {
+    // The failure the fix can introduce, and the reason round 518's partial
+    // version was reverted. INTERNAL names bytes lost in transit, as grpc-go
+    // answers them; DEADLINE_EXCEEDED (status 4) would mean the call was
+    // left waiting.
+    expect(
+      await _unary(split: true, truncate: true),
+      startsWith('status ${RpcStatus.internal.code}'),
+      reason: 'an incomplete frame that is merely awaited is a hang',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'a LATE half-close mid-frame also gets a status',
-    () async {
-      // Same failure, different ordering, and a different branch answers it: here
-      // the pipeline has already dispatched a waiting responder when the
-      // half-close arrives. With the fragment carrying its own end-of-stream the
-      // dispatch sees `clientEnded` and answers there instead, so that arm cannot
-      // see this one.
-      expect(
-        await _unary(split: true, truncate: true, lateEnd: true),
-        startsWith('status ${RpcStatus.internal.code}'),
-        reason: 'a request left incomplete must be answered, not awaited',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('a LATE half-close mid-frame also gets a status', () async {
+    // Same failure, different ordering, and a different branch answers it: here
+    // the pipeline has already dispatched a waiting responder when the
+    // half-close arrives. With the fragment carrying its own end-of-stream the
+    // dispatch sees `clientEnded` and answers there instead, so that arm cannot
+    // see this one.
+    expect(
+      await _unary(split: true, truncate: true, lateEnd: true),
+      startsWith('status ${RpcStatus.internal.code}'),
+      reason: 'a request left incomplete must be answered, not awaited',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   // One pipeline, three shapes, and each used to give the peer a different ending
   // on the same input: unary a status, a server stream its deadline, a client
@@ -332,19 +320,15 @@ void main() {
   // incomplete one. Separate tests, because the two failures are different and a
   // single test stops at whichever assertion fails first.
 
-  test(
-    'WITNESS a server stream answers a mid-frame half-close',
-    () async {
-      expect(
-        await _serverStream(split: true, truncate: true),
-        startsWith('status ${RpcStatus.internal.code}'),
-        reason:
-            'a server stream carries exactly one request, so without this the '
-            'handler never runs and the call waits out its deadline',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('WITNESS a server stream answers a mid-frame half-close', () async {
+    expect(
+      await _serverStream(split: true, truncate: true),
+      startsWith('status ${RpcStatus.internal.code}'),
+      reason:
+          'a server stream carries exactly one request, so without this the '
+          'handler never runs and the call waits out its deadline',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   test(
     'WITNESS a client stream does not report a truncated request as empty',
@@ -360,28 +344,20 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
-  test(
-    'WITNESS a bidi stream answers a mid-frame half-close',
-    () async {
-      // The same StreamProcessor path as the two shapes above, so fixed by
-      // construction; this is what measures it.
-      expect(
-        await _bidi(split: true, truncate: true),
-        startsWith('status ${RpcStatus.internal.code}'),
-        reason: 'an incomplete frame followed by a half-close must be answered',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('WITNESS a bidi stream answers a mid-frame half-close', () async {
+    // The same StreamProcessor path as the two shapes above, so fixed by
+    // construction; this is what measures it.
+    expect(
+      await _bidi(split: true, truncate: true),
+      startsWith('status ${RpcStatus.internal.code}'),
+      reason: 'an incomplete frame followed by a half-close must be answered',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD a fragmented bidi request still works',
-    () async {
-      expect(await _bidi(split: false), 'got:64');
-      expect(await _bidi(split: true), 'got:64');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('GUARD a fragmented bidi request still works', () async {
+    expect(await _bidi(split: false), 'got:64');
+    expect(await _bidi(split: true), 'got:64');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   test('GUARD whole frames still work', () async {
     expect(await _unary(split: false), 'got:64');
@@ -389,104 +365,92 @@ void main() {
     expect(await _clientStream(split: false), 'got:1');
   }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD a fragmented request still works on every shape',
-    () async {
-      // The other direction of the same rule: holding a partial frame must not
-      // leak into a call whose frames do arrive, just in pieces.
-      expect(await _unary(split: true), 'got:64');
-      expect(await _serverStream(split: true), 'got:64');
-      expect(await _clientStream(split: true), 'got:1');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('GUARD a fragmented request still works on every shape', () async {
+    // The other direction of the same rule: holding a partial frame must not
+    // leak into a call whose frames do arrive, just in pieces.
+    expect(await _unary(split: true), 'got:64');
+    expect(await _serverStream(split: true), 'got:64');
+    expect(await _clientStream(split: true), 'got:1');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD a REFUSED frame is not reported as a truncated one',
-    () async {
-      // The arm that reverted attempt 2. A frame the parser refuses yields no
-      // messages, exactly like an incomplete one — so an implementation reading
-      // emptiness as "incomplete" answers INVALID_ARGUMENT "closed mid-message"
-      // where the operator's limit fired, and the status no longer names what
-      // refused it.
-      final answer = await _unary(
-        split: true,
-        requestBytes: 64 * 1024,
-        responderPolicy: const RpcSecurityPolicy(maxMessageLengthBytes: 1024),
-      );
+  test('GUARD a REFUSED frame is not reported as a truncated one', () async {
+    // The arm that reverted attempt 2. A frame the parser refuses yields no
+    // messages, exactly like an incomplete one — so an implementation reading
+    // emptiness as "incomplete" answers INVALID_ARGUMENT "closed mid-message"
+    // where the operator's limit fired, and the status no longer names what
+    // refused it.
+    final answer = await _unary(
+      split: true,
+      requestBytes: 64 * 1024,
+      responderPolicy: const RpcSecurityPolicy(maxMessageLengthBytes: 1024),
+    );
 
-      expect(
-        answer,
-        startsWith('status ${RpcStatus.resourceExhausted.code}'),
-        reason:
-            'the request is past maxMessageLengthBytes, which is a refusal and '
-            'not a truncation',
-      );
-      expect(
-        answer,
-        contains('max:'),
-        reason:
-            'a resource limit must name the limit it enforced — the number is '
-            'the buffer bound derived from maxMessageLengthBytes, not that '
-            'field verbatim',
-      );
-      expect(
-        answer,
-        isNot(contains('mid-message')),
-        reason:
-            'this is the wrong answer attempt 2 gave: a refusal reported as a '
-            'truncation',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      answer,
+      startsWith('status ${RpcStatus.resourceExhausted.code}'),
+      reason:
+          'the request is past maxMessageLengthBytes, which is a refusal and '
+          'not a truncation',
+    );
+    expect(
+      answer,
+      contains('max:'),
+      reason:
+          'a resource limit must name the limit it enforced — the number is '
+          'the buffer bound derived from maxMessageLengthBytes, not that '
+          'field verbatim',
+    );
+    expect(
+      answer,
+      isNot(contains('mid-message')),
+      reason:
+          'this is the wrong answer attempt 2 gave: a refusal reported as a '
+          'truncation',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD the streaming shapes are unaffected',
-    () async {
-      // This is what makes the skipped witness a statement about UNARY: the same
-      // rig, the same fragmenting channel, and the streaming shapes answer. Any
-      // third attempt must keep this row passing.
-      final (client, server) = TapPipe.pair();
-      client.transform = _fragment();
-      server.transform = _fragment();
+  test('GUARD the streaming shapes are unaffected', () async {
+    // This is what makes the skipped witness a statement about UNARY: the same
+    // rig, the same fragmenting channel, and the streaming shapes answer. Any
+    // third attempt must keep this row passing.
+    final (client, server) = TapPipe.pair();
+    client.transform = _fragment();
+    server.transform = _fragment();
 
-      final responder =
-          RpcResponderEndpoint(
-              transport: RpcChannelTransport(
-                channel: RpcFrameMultiplexedChannel(
-                  channel: server,
-                  isClient: false,
-                ),
+    final responder =
+        RpcResponderEndpoint(
+            transport: RpcChannelTransport(
+              channel: RpcFrameMultiplexedChannel(
+                channel: server,
                 isClient: false,
               ),
-            )
-            ..registerServiceContract(_Svc())
-            ..start();
-      final caller = RpcCallerEndpoint(
-        transport: RpcChannelTransport(
-          channel: RpcFrameMultiplexedChannel(channel: client, isClient: true),
-          isClient: true,
-        ),
-      );
-      addTearDown(() async {
-        await caller.close();
-        await responder.close();
-      });
-
-      final got = await caller
-          .serverStream<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'tick',
-            request: ('x' * 64).rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-            context: RpcContext.empty().withTimeout(const Duration(seconds: 3)),
+              isClient: false,
+            ),
           )
-          .toList();
+          ..registerServiceContract(_Svc())
+          ..start();
+    final caller = RpcCallerEndpoint(
+      transport: RpcChannelTransport(
+        channel: RpcFrameMultiplexedChannel(channel: client, isClient: true),
+        isClient: true,
+      ),
+    );
+    addTearDown(() async {
+      await caller.close();
+      await responder.close();
+    });
 
-      expect(got.map((e) => e.value), ['got:64']);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    final got = await caller
+        .serverStream<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'tick',
+          request: ('x' * 64).rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+          context: RpcContext.empty().withTimeout(const Duration(seconds: 3)),
+        )
+        .toList();
+
+    expect(got.map((e) => e.value), ['got:64']);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

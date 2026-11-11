@@ -142,37 +142,29 @@ void main() {
 
   // GUARD: the ceiling must not end a stream that FITS. Without this, a
   // responder that refused every server stream would pass the witness.
-  test(
-    'GUARD: a stream under the ceiling is delivered whole',
-    () async {
-      final rig = await _serve(4);
-      final out = await _drain(rig.caller);
+  test('GUARD: a stream under the ceiling is delivered whole', () async {
+    final rig = await _serve(4);
+    final out = await _drain(rig.caller);
 
-      expect(out.error, isNull);
-      expect(out.received, 4);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(out.error, isNull);
+    expect(out.received, 4);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   // The handler is STOPPED once the stream is answered: the transport tells
   // the pipeline the way a peer cancellation is told. Without it the handler
   // ran to completion with its output dropped, holding its slot meanwhile.
-  test(
-    'the handler is cancelled once the stream is ended',
-    () async {
-      final rig = await _serve(200);
-      await _drain(rig.caller);
-      final atAnswer = rig.produced();
+  test('the handler is cancelled once the stream is ended', () async {
+    final rig = await _serve(200);
+    await _drain(rig.caller);
+    final atAnswer = rig.produced();
 
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+    await Future<void>.delayed(const Duration(milliseconds: 300));
 
-      expect(
-        rig.produced(),
-        lessThan(200),
-        reason: 'the handler must not run to completion',
-      );
-      expect(rig.produced() - atAnswer, lessThan(5));
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      rig.produced(),
+      lessThan(200),
+      reason: 'the handler must not run to completion',
+    );
+    expect(rig.produced() - atAnswer, lessThan(5));
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

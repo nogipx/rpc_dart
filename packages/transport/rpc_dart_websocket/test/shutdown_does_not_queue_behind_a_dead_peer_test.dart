@@ -64,43 +64,35 @@ Future<_Run> _stop({required int peers, Duration closeDelay = _delay}) async {
 }
 
 void main() {
-  test(
-    'WITNESS: shutdown does not grow with the number of slow peers',
-    () async {
-      final one = await _stop(peers: 1);
-      final many = await _stop(peers: 20);
+  test('WITNESS: shutdown does not grow with the number of slow peers', () async {
+    final one = await _stop(peers: 1);
+    final many = await _stop(peers: 20);
 
-      expect(
-        many.millis,
-        lessThan(one.millis * 4),
-        reason:
-            'shutdown is the SUM of every peer\'s close handshake, so one dead '
-            'connection delays every connection behind it: '
-            '1 peer ${one.millis}ms, 20 peers ${many.millis}ms',
-      );
-      expect(
-        many.closed,
-        20,
-        reason:
-            'fast because the endpoints were abandoned rather than closed, which '
-            'leaves their sockets open with nothing left to close them',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 120)),
-  );
+    expect(
+      many.millis,
+      lessThan(one.millis * 4),
+      reason:
+          'shutdown is the SUM of every peer\'s close handshake, so one dead '
+          'connection delays every connection behind it: '
+          '1 peer ${one.millis}ms, 20 peers ${many.millis}ms',
+    );
+    expect(
+      many.closed,
+      20,
+      reason:
+          'fast because the endpoints were abandoned rather than closed, which '
+          'leaves their sockets open with nothing left to close them',
+    );
+  }, timeout: const Timeout(Duration(seconds: 120)));
 
   // CONTROL: with nothing slow to wait for, shutdown must still be immediate —
   // otherwise the measurement above is of endpoint bookkeeping, not of the close.
-  test(
-    'CONTROL: instant closes make shutdown immediate',
-    () async {
-      final run = await _stop(peers: 20, closeDelay: Duration.zero);
+  test('CONTROL: instant closes make shutdown immediate', () async {
+    final run = await _stop(peers: 20, closeDelay: Duration.zero);
 
-      expect(run.millis, lessThan(_delay.inMilliseconds));
-      expect(run.closed, 20);
-    },
-    timeout: const Timeout(Duration(seconds: 120)),
-  );
+    expect(run.millis, lessThan(_delay.inMilliseconds));
+    expect(run.closed, 20);
+  }, timeout: const Timeout(Duration(seconds: 120)));
 }
 
 /// A channel whose CLOSE takes [closeDelay], and which records that it happened.

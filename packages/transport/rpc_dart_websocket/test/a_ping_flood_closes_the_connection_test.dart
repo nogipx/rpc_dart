@@ -45,40 +45,36 @@ Future<Socket> _upgrade(int port) async {
 }
 
 void main() {
-  test(
-    'WITNESS a client flooding pings is dropped',
-    () async {
-      final http = await HttpServer.bind('127.0.0.1', 0);
-      final closed = Completer<void>();
-      final server = RpcWebSocketServer(
-        connections: rpcWebSocketConnections(http),
-        mode: RpcResponderMode((_) {}),
-        onConnectionClosed: (_) {
-          if (!closed.isCompleted) closed.complete();
-        },
-      );
-      await server.start();
-      addTearDown(() async {
-        await server.stop();
-        await http.close(force: true);
-      });
+  test('WITNESS a client flooding pings is dropped', () async {
+    final http = await HttpServer.bind('127.0.0.1', 0);
+    final closed = Completer<void>();
+    final server = RpcWebSocketServer(
+      connections: rpcWebSocketConnections(http),
+      mode: RpcResponderMode((_) {}),
+      onConnectionClosed: (_) {
+        if (!closed.isCompleted) closed.complete();
+      },
+    );
+    await server.start();
+    addTearDown(() async {
+      await server.stop();
+      await http.close(force: true);
+    });
 
-      final socket = await _upgrade(http.port);
-      addTearDown(socket.destroy);
-      // Never read: the pongs pile up on the server unless it drops us.
-      socket.listen(null).pause();
-      final ping = _frame(9, 125);
-      try {
-        for (var i = 0; i < 4096; i++) {
-          socket.add(ping);
-        }
-        await socket.flush();
-      } on SocketException {
-        // The server may already have closed it.
+    final socket = await _upgrade(http.port);
+    addTearDown(socket.destroy);
+    // Never read: the pongs pile up on the server unless it drops us.
+    socket.listen(null).pause();
+    final ping = _frame(9, 125);
+    try {
+      for (var i = 0; i < 4096; i++) {
+        socket.add(ping);
       }
+      await socket.flush();
+    } on SocketException {
+      // The server may already have closed it.
+    }
 
-      await closed.future.timeout(const Duration(seconds: 10));
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    await closed.future.timeout(const Duration(seconds: 10));
+  }, timeout: const Timeout(Duration(seconds: 30)));
 }

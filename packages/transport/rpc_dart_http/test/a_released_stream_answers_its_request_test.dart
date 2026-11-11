@@ -142,69 +142,61 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
-  test(
-    'CONTROL: a handler that cooperates answered all along',
-    () async {
-      final rig = await _serve(cooperative: true);
-      await _callWithDeadline(rig.caller);
-      await _awaitAnswered(rig.answered);
+  test('CONTROL: a handler that cooperates answered all along', () async {
+    final rig = await _serve(cooperative: true);
+    await _callWithDeadline(rig.caller);
+    await _awaitAnswered(rig.answered);
 
-      expect(rig.arrived(), 1);
-      expect(rig.answered(), 1);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(rig.arrived(), 1);
+    expect(rig.answered(), 1);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   // GUARD: an ORDINARY call must still be answered exactly once. `_flushResponse`
   // removes the pending entry before `releaseStreamId` sees it, and a second
   // completion would throw `Bad state: Future already completed` into the
   // pipeline rather than failing here.
-  test(
-    'GUARD: a normal call is answered once, with its own status',
-    () async {
-      var arrived = 0;
-      var answered = 0;
-      final responder = RpcHttpResponderTransport();
-      final endpoint = RpcResponderEndpoint(transport: responder)
-        ..registerServiceContract(_Echo()..setup())
-        ..start();
-      final server = await shelf_io.serve(
-        (shelf.Request req) async {
-          arrived++;
-          final response = await responder.handler(req);
-          answered++;
-          return response;
-        },
-        '127.0.0.1',
-        0,
-      );
-      final caller = RpcCallerEndpoint(
-        transport: RpcHttpCallerTransport(
-          baseUrl: 'http://127.0.0.1:${server.port}',
-        ),
-      );
-      addTearDown(() async {
-        await caller.close();
-        await endpoint.close();
-        await server.close(force: true);
-      });
+  test('GUARD: a normal call is answered once, with its own status', () async {
+    var arrived = 0;
+    var answered = 0;
+    final responder = RpcHttpResponderTransport();
+    final endpoint = RpcResponderEndpoint(transport: responder)
+      ..registerServiceContract(_Echo()..setup())
+      ..start();
+    final server = await shelf_io.serve(
+      (shelf.Request req) async {
+        arrived++;
+        final response = await responder.handler(req);
+        answered++;
+        return response;
+      },
+      '127.0.0.1',
+      0,
+    );
+    final caller = RpcCallerEndpoint(
+      transport: RpcHttpCallerTransport(
+        baseUrl: 'http://127.0.0.1:${server.port}',
+      ),
+    );
+    addTearDown(() async {
+      await caller.close();
+      await endpoint.close();
+      await server.close(force: true);
+    });
 
-      final reply = await caller
-          .unary<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'echo',
-            request: 'hi'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          )
-          .timeout(const Duration(seconds: 5));
+    final reply = await caller
+        .unary<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'echo',
+          request: 'hi'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .timeout(const Duration(seconds: 5));
 
-      expect(reply.value, 'echo:hi');
-      expect(arrived, 1);
-      expect(answered, 1);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(reply.value, 'echo:hi');
+    expect(arrived, 1);
+    expect(answered, 1);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }
 
 final class _Echo extends RpcResponderContract {

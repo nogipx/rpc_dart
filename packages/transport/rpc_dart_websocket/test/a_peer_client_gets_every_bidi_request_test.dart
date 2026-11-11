@@ -141,14 +141,10 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
-  test(
-    'CONTROL: the same two calls served by the server side',
-    () async {
-      expect(
-        await _twoCalls(peer: false),
-        'answered one | answered two | started [one, two]',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('CONTROL: the same two calls served by the server side', () async {
+    expect(
+      await _twoCalls(peer: false),
+      'answered one | answered two | started [one, two]',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

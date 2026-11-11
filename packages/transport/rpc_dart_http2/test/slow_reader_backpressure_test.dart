@@ -76,128 +76,116 @@ void main() {
     if (!_run.stop.isCompleted) _run.stop.complete();
   });
 
-  test(
-    'a client that stops reading stops the server producing',
-    () async {
-      final run = _run = _Run();
-      final server = RpcHttp2Server(
-        host: '127.0.0.1',
-        port: 0,
-        mode: RpcResponderMode(
-          (e) => e.registerServiceContract(_Contract(run)),
-        ),
-      );
-      await server.start();
-      final transport = await RpcHttp2CallerTransport.connect(
-        host: '127.0.0.1',
-        port: server.port,
-      );
-      final caller = RpcCallerEndpoint(transport: transport);
+  test('a client that stops reading stops the server producing', () async {
+    final run = _run = _Run();
+    final server = RpcHttp2Server(
+      host: '127.0.0.1',
+      port: 0,
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Contract(run))),
+    );
+    await server.start();
+    final transport = await RpcHttp2CallerTransport.connect(
+      host: '127.0.0.1',
+      port: server.port,
+    );
+    final caller = RpcCallerEndpoint(transport: transport);
 
-      var received = 0;
-      final paused = Completer<void>();
-      late StreamSubscription<RpcString> sub;
-      sub = caller
-          .serverStream<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'Firehose',
-            request: 'go'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          )
-          .listen(
-            (_) {
-              received++;
-              if (received == 5 && !paused.isCompleted) {
-                sub.pause();
-                paused.complete();
-              }
-            },
-            onError: (Object _) {},
-            cancelOnError: false,
-          );
+    var received = 0;
+    final paused = Completer<void>();
+    late StreamSubscription<RpcString> sub;
+    sub = caller
+        .serverStream<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'Firehose',
+          request: 'go'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .listen(
+          (_) {
+            received++;
+            if (received == 5 && !paused.isCompleted) {
+              sub.pause();
+              paused.complete();
+            }
+          },
+          onError: (Object _) {},
+          cancelOnError: false,
+        );
 
-      await paused.future.timeout(const Duration(seconds: 30));
-      final atPause = run.produced;
-      await Future<void>.delayed(const Duration(seconds: 3));
-      final overrun = run.produced - atPause;
+    await paused.future.timeout(const Duration(seconds: 30));
+    final atPause = run.produced;
+    await Future<void>.delayed(const Duration(seconds: 3));
+    final overrun = run.produced - atPause;
 
-      expect(
-        overrun,
-        lessThan(2000),
-        reason:
-            'handler produced $overrun more items '
-            '(${(overrun * 4096 / 1024 / 1024).toStringAsFixed(1)} MiB) while '
-            'the client was paused; the peer window is not reaching it',
-      );
+    expect(
+      overrun,
+      lessThan(2000),
+      reason:
+          'handler produced $overrun more items '
+          '(${(overrun * 4096 / 1024 / 1024).toStringAsFixed(1)} MiB) while '
+          'the client was paused; the peer window is not reaching it',
+    );
 
-      // GUARD: throttling must not break delivery.
-      sub.resume();
-      final deadline = DateTime.now().add(const Duration(seconds: 10));
-      while (received < 50 && DateTime.now().isBefore(deadline)) {
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-      }
-      expect(
-        received,
-        greaterThan(50),
-        reason: 'after resume the client received only $received items',
-      );
+    // GUARD: throttling must not break delivery.
+    sub.resume();
+    final deadline = DateTime.now().add(const Duration(seconds: 10));
+    while (received < 50 && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    expect(
+      received,
+      greaterThan(50),
+      reason: 'after resume the client received only $received items',
+    );
 
-      run.stop.complete();
-      await sub.cancel();
-      await transport.close().catchError((Object _) {});
-      await server.stop();
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    run.stop.complete();
+    await sub.cancel();
+    await transport.close().catchError((Object _) {});
+    await server.stop();
+  }, timeout: const Timeout(Duration(seconds: 90)));
 
-  test(
-    'an ordinary server stream is unaffected',
-    () async {
-      // GUARD (passes both sides): a consumer that keeps reading gets everything,
-      // so the backpressure does not cost throughput or truncate.
-      final run = _run = _Run();
-      final server = RpcHttp2Server(
-        host: '127.0.0.1',
-        port: 0,
-        mode: RpcResponderMode(
-          (e) => e.registerServiceContract(_Contract(run)),
-        ),
-      );
-      await server.start();
-      final transport = await RpcHttp2CallerTransport.connect(
-        host: '127.0.0.1',
-        port: server.port,
-      );
-      final caller = RpcCallerEndpoint(transport: transport);
+  test('an ordinary server stream is unaffected', () async {
+    // GUARD (passes both sides): a consumer that keeps reading gets everything,
+    // so the backpressure does not cost throughput or truncate.
+    final run = _run = _Run();
+    final server = RpcHttp2Server(
+      host: '127.0.0.1',
+      port: 0,
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Contract(run))),
+    );
+    await server.start();
+    final transport = await RpcHttp2CallerTransport.connect(
+      host: '127.0.0.1',
+      port: server.port,
+    );
+    final caller = RpcCallerEndpoint(transport: transport);
 
-      final got = <RpcString>[];
-      final done = Completer<void>();
-      final sub = caller
-          .serverStream<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'Firehose',
-            request: 'go'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          )
-          .listen(
-            (m) {
-              got.add(m);
-              if (got.length == 200 && !done.isCompleted) done.complete();
-            },
-            onError: (Object _) {},
-            cancelOnError: false,
-          );
+    final got = <RpcString>[];
+    final done = Completer<void>();
+    final sub = caller
+        .serverStream<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'Firehose',
+          request: 'go'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .listen(
+          (m) {
+            got.add(m);
+            if (got.length == 200 && !done.isCompleted) done.complete();
+          },
+          onError: (Object _) {},
+          cancelOnError: false,
+        );
 
-      await done.future.timeout(const Duration(seconds: 30));
-      expect(got.length, greaterThanOrEqualTo(200));
+    await done.future.timeout(const Duration(seconds: 30));
+    expect(got.length, greaterThanOrEqualTo(200));
 
-      run.stop.complete();
-      await sub.cancel();
-      await transport.close().catchError((Object _) {});
-      await server.stop();
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    run.stop.complete();
+    await sub.cancel();
+    await transport.close().catchError((Object _) {});
+    await server.stop();
+  }, timeout: const Timeout(Duration(seconds: 90)));
 }

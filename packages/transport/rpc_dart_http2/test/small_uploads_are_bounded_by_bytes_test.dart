@@ -56,38 +56,34 @@ Stream<RpcString> _requests() async* {
 }
 
 void main() {
-  test(
-    'WITNESS small uploads reach a slightly slow handler',
-    () async {
-      final server = RpcHttp2Server(
+  test('WITNESS small uploads reach a slightly slow handler', () async {
+    final server = RpcHttp2Server(
+      host: '127.0.0.1',
+      port: 0,
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
+    );
+    await server.start();
+    final caller = RpcCallerEndpoint(
+      transport: await RpcHttp2CallerTransport.connect(
         host: '127.0.0.1',
-        port: 0,
-        mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
-      );
-      await server.start();
-      final caller = RpcCallerEndpoint(
-        transport: await RpcHttp2CallerTransport.connect(
-          host: '127.0.0.1',
-          port: server.port,
-        ),
-      );
-      addTearDown(() async {
-        await caller.close();
-        await server.stop();
-      });
+        port: server.port,
+      ),
+    );
+    addTearDown(() async {
+      await caller.close();
+      await server.stop();
+    });
 
-      final response = await caller
-          .clientStream<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'Upload',
-            requestCodec: _codec,
-            responseCodec: _codec,
-            requests: _requests(),
-          )
-          .timeout(const Duration(seconds: 60));
+    final response = await caller
+        .clientStream<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'Upload',
+          requestCodec: _codec,
+          responseCodec: _codec,
+          requests: _requests(),
+        )
+        .timeout(const Duration(seconds: 60));
 
-      expect(response.value, '$_count');
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    expect(response.value, '$_count');
+  }, timeout: const Timeout(Duration(seconds: 90)));
 }

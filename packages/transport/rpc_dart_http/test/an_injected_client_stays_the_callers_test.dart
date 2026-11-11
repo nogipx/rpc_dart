@@ -86,45 +86,41 @@ void main() {
   // closed, or the fix trades a broken client for a leaked one. Counted as
   // descriptors, since an owned client cannot be reached from here — a pooled
   // keep-alive connection is what an unclosed client holds open.
-  test(
-    'CONTROL: a client the transport created is still closed',
-    () async {
-      if (await _fdsToPort(0) == null) {
-        markTestSkipped('lsof unavailable: nothing here can be counted');
-        return;
-      }
-      final server = await _server();
+  test('CONTROL: a client the transport created is still closed', () async {
+    if (await _fdsToPort(0) == null) {
+      markTestSkipped('lsof unavailable: nothing here can be counted');
+      return;
+    }
+    final server = await _server();
 
-      final transport = RpcHttpCallerTransport(
-        baseUrl: 'http://127.0.0.1:${server.port}',
-      );
-      final id = transport.createStream();
-      await transport.sendMetadata(
-        id,
-        RpcMetadata.forClientRequest('Svc', 'ping'),
-      );
-      await transport
-          .sendMessage(
-            id,
-            RpcMessageFrame.encode(Uint8List.fromList(<int>[1])),
-            endStream: true,
-          )
-          .catchError((Object _) {});
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+    final transport = RpcHttpCallerTransport(
+      baseUrl: 'http://127.0.0.1:${server.port}',
+    );
+    final id = transport.createStream();
+    await transport.sendMetadata(
+      id,
+      RpcMetadata.forClientRequest('Svc', 'ping'),
+    );
+    await transport
+        .sendMessage(
+          id,
+          RpcMessageFrame.encode(Uint8List.fromList(<int>[1])),
+          endStream: true,
+        )
+        .catchError((Object _) {});
+    await Future<void>.delayed(const Duration(milliseconds: 300));
 
-      final during = (await _fdsToPort(server.port))!;
-      await transport.close();
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      final after = (await _fdsToPort(server.port))!;
+    final during = (await _fdsToPort(server.port))!;
+    await transport.close();
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    final after = (await _fdsToPort(server.port))!;
 
-      expect(
-        after,
-        lessThan(during),
-        reason:
-            'the transport stopped closing the client it owns, so its pooled '
-            'connection outlives the transport with nobody able to close it',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(
+      after,
+      lessThan(during),
+      reason:
+          'the transport stopped closing the client it owns, so its pooled '
+          'connection outlives the transport with nobody able to close it',
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
 }

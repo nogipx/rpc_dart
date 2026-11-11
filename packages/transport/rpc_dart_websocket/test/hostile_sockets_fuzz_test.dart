@@ -211,47 +211,43 @@ void main() {
     }, timeout: const Timeout(Duration(minutes: 2)));
   }
 
-  test(
-    'a hostile server cannot hang the client',
-    () async {
-      final rnd = Random(23);
-      final zone = <Object>[];
-      await runZonedGuarded(() async {
-        final server = await ServerSocket.bind('127.0.0.1', 0);
-        server.listen((s) => unawaited(_hostileServe(rnd, s)));
-        for (var i = 0; i < 25; i++) {
-          RpcWebSocketCallerTransport client;
-          try {
-            client = await RpcWebSocketCallerTransport.connect(
-              Uri.parse('ws://127.0.0.1:${server.port}'),
-            ).timeout(const Duration(seconds: 4));
-          } on TimeoutException {
-            fail('connect hung');
-          } catch (_) {
-            continue; // a refused connect is a legitimate outcome
-          }
-          final caller = RpcCallerEndpoint(transport: client);
-          final outcome = await caller
-              .unary<RpcString, RpcString>(
-                serviceName: 'Svc',
-                methodName: 'u',
-                request: 'q'.rpc,
-                requestCodec: _codec,
-                responseCodec: _codec,
-                context: RpcContext.empty().withTimeout(
-                  const Duration(milliseconds: 300),
-                ),
-              )
-              .then((_) => 'value', onError: (Object _) => 'error')
-              .timeout(const Duration(seconds: 4), onTimeout: () => 'HUNG');
-          expect(outcome, isNot('HUNG'));
-          await caller.close().timeout(const Duration(seconds: 4));
-          await client.close().timeout(const Duration(seconds: 4));
+  test('a hostile server cannot hang the client', () async {
+    final rnd = Random(23);
+    final zone = <Object>[];
+    await runZonedGuarded(() async {
+      final server = await ServerSocket.bind('127.0.0.1', 0);
+      server.listen((s) => unawaited(_hostileServe(rnd, s)));
+      for (var i = 0; i < 25; i++) {
+        RpcWebSocketCallerTransport client;
+        try {
+          client = await RpcWebSocketCallerTransport.connect(
+            Uri.parse('ws://127.0.0.1:${server.port}'),
+          ).timeout(const Duration(seconds: 4));
+        } on TimeoutException {
+          fail('connect hung');
+        } catch (_) {
+          continue; // a refused connect is a legitimate outcome
         }
-        await server.close();
-      }, (e, _) => zone.add(e));
-      expect(zone, isEmpty);
-    },
-    timeout: const Timeout(Duration(minutes: 2)),
-  );
+        final caller = RpcCallerEndpoint(transport: client);
+        final outcome = await caller
+            .unary<RpcString, RpcString>(
+              serviceName: 'Svc',
+              methodName: 'u',
+              request: 'q'.rpc,
+              requestCodec: _codec,
+              responseCodec: _codec,
+              context: RpcContext.empty().withTimeout(
+                const Duration(milliseconds: 300),
+              ),
+            )
+            .then((_) => 'value', onError: (Object _) => 'error')
+            .timeout(const Duration(seconds: 4), onTimeout: () => 'HUNG');
+        expect(outcome, isNot('HUNG'));
+        await caller.close().timeout(const Duration(seconds: 4));
+        await client.close().timeout(const Duration(seconds: 4));
+      }
+      await server.close();
+    }, (e, _) => zone.add(e));
+    expect(zone, isEmpty);
+  }, timeout: const Timeout(Duration(minutes: 2)));
 }

@@ -50,59 +50,55 @@ Uint8List _wrappingBomb({int tail = 4096}) {
 }
 
 void main() {
-  test(
-    'a payload whose ISIZE wraps is refused without inflating it',
-    () async {
-      final bomb = _wrappingBomb();
+  test('a payload whose ISIZE wraps is refused without inflating it', () async {
+    final bomb = _wrappingBomb();
 
-      // The pre-check cannot catch this one: ISIZE says 4096.
-      final n = bomb.length;
-      final declared =
-          bomb[n - 4] |
-          (bomb[n - 3] << 8) |
-          (bomb[n - 2] << 16) |
-          (bomb[n - 1] << 24);
-      expect(
-        declared,
-        lessThan(16 * 1024 * 1024),
-        reason: 'the bomb must look harmless to a trailer-based pre-check',
-      );
+    // The pre-check cannot catch this one: ISIZE says 4096.
+    final n = bomb.length;
+    final declared =
+        bomb[n - 4] |
+        (bomb[n - 3] << 8) |
+        (bomb[n - 2] << 16) |
+        (bomb[n - 1] << 24);
+    expect(
+      declared,
+      lessThan(16 * 1024 * 1024),
+      reason: 'the bomb must look harmless to a trailer-based pre-check',
+    );
 
-      final codec = RpcGzipCodec();
-      final before = ProcessInfo.currentRss;
-      final sw = Stopwatch()..start();
+    final codec = RpcGzipCodec();
+    final before = ProcessInfo.currentRss;
+    final sw = Stopwatch()..start();
 
-      expect(
-        () => codec.decompress(bomb, maxOutputBytes: 16 * 1024 * 1024),
-        throwsA(
-          isA<RpcStatusException>().having(
-            (e) => e.statusCode,
-            'statusCode',
-            RpcStatus.resourceExhausted,
-          ),
+    expect(
+      () => codec.decompress(bomb, maxOutputBytes: 16 * 1024 * 1024),
+      throwsA(
+        isA<RpcStatusException>().having(
+          (e) => e.statusCode,
+          'statusCode',
+          RpcStatus.resourceExhausted,
         ),
-      );
+      ),
+    );
 
-      sw.stop();
-      final grewMiB = (ProcessInfo.currentRss - before) / 1024 / 1024;
+    sw.stop();
+    final grewMiB = (ProcessInfo.currentRss - before) / 1024 / 1024;
 
-      // Bounded assertions, so a fixed threshold is sound: contention can only
-      // make this slower, never make it allocate less.
-      expect(
-        grewMiB,
-        lessThan(400),
-        reason:
-            'inflating ran to completion: RSS grew '
-            '${grewMiB.toStringAsFixed(1)} MiB for a 16 MiB limit',
-      );
-      expect(
-        sw.elapsedMilliseconds,
-        lessThan(5000),
-        reason: 'took ${sw.elapsedMilliseconds} ms, i.e. it inflated 4 GiB',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 120)),
-  );
+    // Bounded assertions, so a fixed threshold is sound: contention can only
+    // make this slower, never make it allocate less.
+    expect(
+      grewMiB,
+      lessThan(400),
+      reason:
+          'inflating ran to completion: RSS grew '
+          '${grewMiB.toStringAsFixed(1)} MiB for a 16 MiB limit',
+    );
+    expect(
+      sw.elapsedMilliseconds,
+      lessThan(5000),
+      reason: 'took ${sw.elapsedMilliseconds} ms, i.e. it inflated 4 GiB',
+    );
+  }, timeout: const Timeout(Duration(seconds: 120)));
 
   test('GUARD: an honest payload within the limit still round-trips', () {
     final codec = RpcGzipCodec();

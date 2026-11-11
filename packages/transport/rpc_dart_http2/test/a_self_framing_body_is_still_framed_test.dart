@@ -173,31 +173,23 @@ void main() {
   // Nothing guesses any more. `RpcMessageParser` is built with `emitFramed: true`
   // by these transports, so every value it emits is a complete frame — it knows
   // which branch it took, and the caller never has to ask the bytes.
-  test(
-    'a body that looks framed is framed anyway',
-    () async {
-      final body = _selfFramingBody(8);
+  test('a body that looks framed is framed anyway', () async {
+    final body = _selfFramingBody(8);
 
-      expect(
-        await _payloadLengthFor(body),
-        body.length + 5,
-        reason:
-            'a body is a body; the parser says whether it framed something, so '
-            'no five bytes of an application message can be read as a header',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      await _payloadLengthFor(body),
+      body.length + 5,
+      reason:
+          'a body is a body; the parser says whether it framed something, so '
+          'no five bytes of an application message can be read as a header',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   // The other half of the same decision: a body that CANNOT be mistaken for a
   // frame is framed, which is the ordinary path for every uncompressed message.
-  test(
-    'a body that cannot look framed is framed',
-    () async {
-      final body = Uint8List.fromList([0x99, ...List.filled(12, 0xAB)]);
+  test('a body that cannot look framed is framed', () async {
+    final body = Uint8List.fromList([0x99, ...List.filled(12, 0xAB)]);
 
-      expect(await _payloadLengthFor(body), body.length + 5);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(await _payloadLengthFor(body), body.length + 5);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

@@ -173,30 +173,26 @@ void main() {
 
     // WITNESS: the DEFAULT is a bound. Waits it out, because a test bound
     // shorter than the default reads the same with and without one.
-    test(
-      'with no connectTimeout given, a black hole is given up on',
-      () async {
-        final uri = await _blackHole();
+    test('with no connectTimeout given, a black hole is given up on', () async {
+      final uri = await _blackHole();
 
-        final outcome = await RpcWebSocketCallerTransport.connect(uri)
-            .then<String>((t) {
-              addTearDown(() => t.close().catchError((Object _) {}));
-              return 'connected to a black hole';
-            })
-            .onError<RpcStatusException>(
-              (e, _) => e.statusCode == RpcStatus.unavailable
-                  ? 'bounded'
-                  : 'status ${e.statusCode.code}',
-            )
-            .timeout(
-              const Duration(seconds: 40),
-              onTimeout: () => 'STILL HANGING at 40 s: no default bound',
-            );
+      final outcome = await RpcWebSocketCallerTransport.connect(uri)
+          .then<String>((t) {
+            addTearDown(() => t.close().catchError((Object _) {}));
+            return 'connected to a black hole';
+          })
+          .onError<RpcStatusException>(
+            (e, _) => e.statusCode == RpcStatus.unavailable
+                ? 'bounded'
+                : 'status ${e.statusCode.code}',
+          )
+          .timeout(
+            const Duration(seconds: 40),
+            onTimeout: () => 'STILL HANGING at 40 s: no default bound',
+          );
 
-        expect(outcome, 'bounded');
-      },
-      timeout: const Timeout(Duration(seconds: 60)),
-    );
+      expect(outcome, 'bounded');
+    }, timeout: const Timeout(Duration(seconds: 60)));
 
     // GUARD: the default bound leaves a healthy connect alone.
     test('GUARD: with the default bound a healthy connect works', () async {

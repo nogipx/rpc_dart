@@ -107,11 +107,9 @@ void main() {
       'still waiting',
     );
 
-    expect(
-      rig.sentTimeouts,
-      ['none'],
-      reason: 'no deadline, so nothing to declare — and nothing was declared',
-    );
+    expect(rig.sentTimeouts, [
+      'none',
+    ], reason: 'no deadline, so nothing to declare — and nothing was declared');
   });
 
   test(

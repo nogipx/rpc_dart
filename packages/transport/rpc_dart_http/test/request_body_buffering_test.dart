@@ -113,111 +113,91 @@ Future<int> _post(int port, int chars) async {
 }
 
 void main() {
-  test(
-    'a body inside the limit is delivered whole',
-    () async {
-      // The rewrite must not truncate or reorder: the handler sees every byte.
-      const limit = 4 * 1024 * 1024;
-      final rig = await _serve(limit: limit);
+  test('a body inside the limit is delivered whole', () async {
+    // The rewrite must not truncate or reorder: the handler sees every byte.
+    const limit = 4 * 1024 * 1024;
+    final rig = await _serve(limit: limit);
 
-      expect(await _post(rig.port, 1024 * 1024), 200);
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(await _post(rig.port, 1024 * 1024), 200);
+    await Future<void>.delayed(const Duration(milliseconds: 200));
 
-      expect(rig.seen, [1024 * 1024]);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(rig.seen, [1024 * 1024]);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'a body over the limit is refused, and the peer is answered',
-    () async {
-      // The overflow path keeps draining so the status can be flushed; bailing
-      // out mid-body makes dart:io tear the connection down first, and the client
-      // sees a socket error instead of a status.
-      const limit = 512 * 1024;
-      final rig = await _serve(limit: limit);
+  test('a body over the limit is refused, and the peer is answered', () async {
+    // The overflow path keeps draining so the status can be flushed; bailing
+    // out mid-body makes dart:io tear the connection down first, and the client
+    // sees a socket error instead of a status.
+    const limit = 512 * 1024;
+    final rig = await _serve(limit: limit);
 
-      final status = await _post(rig.port, limit + 64 * 1024);
-      expect(status, isNot(200), reason: 'an oversized body must be refused');
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+    final status = await _post(rig.port, limit + 64 * 1024);
+    expect(status, isNot(200), reason: 'an oversized body must be refused');
+    await Future<void>.delayed(const Duration(milliseconds: 200));
 
-      expect(rig.seen, isEmpty, reason: 'the handler must never see it');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(rig.seen, isEmpty, reason: 'the handler must never see it');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'a large response body arrives whole',
-    () async {
-      // The response buffer got the same fix, and draining it with takeBytes()
-      // is destructive — this pins that the body still arrives, and once.
-      final rig = await _serve(limit: 8 * 1024 * 1024);
-      final caller = RpcCallerEndpoint(
-        transport: RpcHttpCallerTransport(
-          baseUrl: 'http://127.0.0.1:${rig.port}',
-        ),
-      );
-      addTearDown(caller.close);
+  test('a large response body arrives whole', () async {
+    // The response buffer got the same fix, and draining it with takeBytes()
+    // is destructive — this pins that the body still arrives, and once.
+    final rig = await _serve(limit: 8 * 1024 * 1024);
+    final caller = RpcCallerEndpoint(
+      transport: RpcHttpCallerTransport(
+        baseUrl: 'http://127.0.0.1:${rig.port}',
+      ),
+    );
+    addTearDown(caller.close);
 
-      final response = await caller
-          .unary<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'big',
-            request: 'go'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          )
-          .timeout(const Duration(seconds: 30));
+    final response = await caller
+        .unary<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'big',
+          request: 'go'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .timeout(const Duration(seconds: 30));
 
-      expect(response.value.length, 2 * 1024 * 1024);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(response.value.length, 2 * 1024 * 1024);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'a multi-message response is concatenated in order',
-    () async {
-      // This transport buffers a whole server stream into one response body, so
-      // the buffer is appended to repeatedly. Order and completeness are what a
-      // buffering rewrite can break.
-      final rig = await _serve(limit: 8 * 1024 * 1024);
-      final caller = RpcCallerEndpoint(
-        transport: RpcHttpCallerTransport(
-          baseUrl: 'http://127.0.0.1:${rig.port}',
-        ),
-      );
-      addTearDown(caller.close);
+  test('a multi-message response is concatenated in order', () async {
+    // This transport buffers a whole server stream into one response body, so
+    // the buffer is appended to repeatedly. Order and completeness are what a
+    // buffering rewrite can break.
+    final rig = await _serve(limit: 8 * 1024 * 1024);
+    final caller = RpcCallerEndpoint(
+      transport: RpcHttpCallerTransport(
+        baseUrl: 'http://127.0.0.1:${rig.port}',
+      ),
+    );
+    addTearDown(caller.close);
 
-      final items = await caller
-          .serverStream<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'stream',
-            request: 'go'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          )
-          .toList()
-          .timeout(const Duration(seconds: 30));
+    final items = await caller
+        .serverStream<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'stream',
+          request: 'go'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .toList()
+        .timeout(const Duration(seconds: 30));
 
-      expect(items.map((i) => i.value).toList(), ['a', 'b', 'c']);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(items.map((i) => i.value).toList(), ['a', 'b', 'c']);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD: the server still serves after refusing one',
-    () async {
-      // Load-bearing: an overflow must cost that request, not the connection
-      // handling that follows it.
-      const limit = 512 * 1024;
-      final rig = await _serve(limit: limit);
+  test('GUARD: the server still serves after refusing one', () async {
+    // Load-bearing: an overflow must cost that request, not the connection
+    // handling that follows it.
+    const limit = 512 * 1024;
+    final rig = await _serve(limit: limit);
 
-      await _post(rig.port, limit + 64 * 1024);
-      expect(await _post(rig.port, 4096), 200);
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+    await _post(rig.port, limit + 64 * 1024);
+    expect(await _post(rig.port, 4096), 200);
+    await Future<void>.delayed(const Duration(milliseconds: 200));
 
-      expect(rig.seen, [4096]);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(rig.seen, [4096]);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

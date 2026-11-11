@@ -112,50 +112,42 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
-  test(
-    'GUARD: a request inside the limit still succeeds',
-    () async {
-      // Without this the witnesses would pass on a server that refused
-      // everything.
-      final rig = await _serve();
+  test('GUARD: a request inside the limit still succeeds', () async {
+    // Without this the witnesses would pass on a server that refused
+    // everything.
+    final rig = await _serve();
 
-      final response = await _send(
-        rig.caller,
-        1024,
-      ).timeout(const Duration(seconds: 30));
+    final response = await _send(
+      rig.caller,
+      1024,
+    ).timeout(const Duration(seconds: 30));
 
-      expect(response.value, 'ok');
-      expect(rig.seen, [1024]);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(response.value, 'ok');
+    expect(rig.seen, [1024]);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD: an unrelated read failure is still INVALID_ARGUMENT',
-    () async {
-      // The status must follow the CAUSE, not become 413 for everything. A body
-      // that is not a decodable gRPC frame is a malformed argument.
-      final rig = await _serve();
+  test('GUARD: an unrelated read failure is still INVALID_ARGUMENT', () async {
+    // The status must follow the CAUSE, not become 413 for everything. A body
+    // that is not a decodable gRPC frame is a malformed argument.
+    final rig = await _serve();
 
-      await expectLater(
-        rig.caller
-            .unary<RpcString, RpcString>(
-              serviceName: 'Svc',
-              methodName: 'nope',
-              request: 'x'.rpc,
-              requestCodec: _codec,
-              responseCodec: _codec,
-            )
-            .timeout(const Duration(seconds: 30)),
-        throwsA(
-          isA<RpcStatusException>().having(
-            (e) => e.statusCode,
-            'statusCode',
-            isNot(RpcStatus.resourceExhausted),
-          ),
+    await expectLater(
+      rig.caller
+          .unary<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: 'nope',
+            request: 'x'.rpc,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .timeout(const Duration(seconds: 30)),
+      throwsA(
+        isA<RpcStatusException>().having(
+          (e) => e.statusCode,
+          'statusCode',
+          isNot(RpcStatus.resourceExhausted),
         ),
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+      ),
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

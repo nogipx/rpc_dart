@@ -207,22 +207,18 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
-  test(
-    'CONTROL: RESOURCE_EXHAUSTED behaves the same',
-    () async {
-      final rig = await _rig(RpcStatus.resourceExhausted);
-      final a = await _startLongCall(rig.caller);
-      final before = a.got.length;
+  test('CONTROL: RESOURCE_EXHAUSTED behaves the same', () async {
+    final rig = await _rig(RpcStatus.resourceExhausted);
+    final a = await _startLongCall(rig.caller);
+    final before = a.got.length;
 
-      expect(await _callBoom(rig.caller), isA<RpcStatusException>());
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+    expect(await _callBoom(rig.caller), isA<RpcStatusException>());
+    await Future<void>.delayed(const Duration(milliseconds: 600));
 
-      expect(rig.sockets(), 1);
-      expect(a.error(), isNull);
-      expect(a.got.length, greaterThan(before));
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(rig.sockets(), 1);
+    expect(a.error(), isNull);
+    expect(a.got.length, greaterThan(before));
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   // GUARD: a path that really died is re-established by the connection, and
   // the retry waits for that before trying again, or no attempt can pass.

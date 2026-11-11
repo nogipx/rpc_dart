@@ -60,124 +60,106 @@ void main() {
 
   tearDown(() => server.stop().catchError((Object _) {}));
 
-  test(
-    'close() returns promptly with a unary call in flight',
-    () async {
-      server = RpcHttp2Server(
-        host: '127.0.0.1',
-        port: 0,
-        mode: RpcResponderMode(
-          (e) => e.registerServiceContract(_SlowContract()),
-        ),
-      );
-      await server.start();
+  test('close() returns promptly with a unary call in flight', () async {
+    server = RpcHttp2Server(
+      host: '127.0.0.1',
+      port: 0,
+      mode: RpcResponderMode((e) => e.registerServiceContract(_SlowContract())),
+    );
+    await server.start();
 
-      final transport = await RpcHttp2CallerTransport.connect(
-        host: '127.0.0.1',
-        port: server.port,
-      );
-      final caller = RpcCallerEndpoint(transport: transport);
+    final transport = await RpcHttp2CallerTransport.connect(
+      host: '127.0.0.1',
+      port: server.port,
+    );
+    final caller = RpcCallerEndpoint(transport: transport);
 
-      final call = caller
+    final call = caller
+        .unary<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'Slow',
+          request: 'x'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .then((r) => 'returned ${r.value}')
+        .catchError(
+          (Object e) => e is RpcStatusException
+              ? 'status ${e.statusCode.code}'
+              : e.runtimeType.toString(),
+        );
+
+    // Let the call reach the server and half-close locally.
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+
+    final sw = Stopwatch()..start();
+    await transport.close();
+    sw.stop();
+
+    expect(
+      sw.elapsed,
+      lessThan(const Duration(milliseconds: 900)),
+      reason:
+          'close() waited for a stream whose response it had already made '
+          'undeliverable; the websocket sibling returns in single-digit ms',
+    );
+
+    // The call must still end, and end classifiably.
+    expect(
+      await call.timeout(const Duration(seconds: 10)),
+      'status ${RpcStatus.unavailable.code}',
+      reason: 'a closed transport must fail its in-flight calls, not hang',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
+
+  test('GUARD: an ordinary call still completes before close', () async {
+    // Aborting more streams on close must not disturb calls that finish first.
+    server = RpcHttp2Server(
+      host: '127.0.0.1',
+      port: 0,
+      mode: RpcResponderMode((e) => e.registerServiceContract(_SlowContract())),
+    );
+    await server.start();
+
+    final transport = await RpcHttp2CallerTransport.connect(
+      host: '127.0.0.1',
+      port: server.port,
+    );
+    final caller = RpcCallerEndpoint(transport: transport);
+
+    for (var i = 0; i < 3; i++) {
+      final r = await caller
           .unary<RpcString, RpcString>(
             serviceName: 'Svc',
-            methodName: 'Slow',
-            request: 'x'.rpc,
+            methodName: 'Quick',
+            request: '$i'.rpc,
             requestCodec: _codec,
             responseCodec: _codec,
           )
-          .then((r) => 'returned ${r.value}')
-          .catchError(
-            (Object e) => e is RpcStatusException
-                ? 'status ${e.statusCode.code}'
-                : e.runtimeType.toString(),
-          );
+          .timeout(const Duration(seconds: 8));
+      expect(r.value, 'quick-ok');
+    }
 
-      // Let the call reach the server and half-close locally.
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+    await transport.close();
+    expect(transport.isClosed, isTrue);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-      final sw = Stopwatch()..start();
-      await transport.close();
-      sw.stop();
+  test('GUARD: close() is still prompt with nothing in flight', () async {
+    server = RpcHttp2Server(
+      host: '127.0.0.1',
+      port: 0,
+      mode: RpcResponderMode((e) => e.registerServiceContract(_SlowContract())),
+    );
+    await server.start();
 
-      expect(
-        sw.elapsed,
-        lessThan(const Duration(milliseconds: 900)),
-        reason:
-            'close() waited for a stream whose response it had already made '
-            'undeliverable; the websocket sibling returns in single-digit ms',
-      );
+    final transport = await RpcHttp2CallerTransport.connect(
+      host: '127.0.0.1',
+      port: server.port,
+    );
 
-      // The call must still end, and end classifiably.
-      expect(
-        await call.timeout(const Duration(seconds: 10)),
-        'status ${RpcStatus.unavailable.code}',
-        reason: 'a closed transport must fail its in-flight calls, not hang',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
-
-  test(
-    'GUARD: an ordinary call still completes before close',
-    () async {
-      // Aborting more streams on close must not disturb calls that finish first.
-      server = RpcHttp2Server(
-        host: '127.0.0.1',
-        port: 0,
-        mode: RpcResponderMode(
-          (e) => e.registerServiceContract(_SlowContract()),
-        ),
-      );
-      await server.start();
-
-      final transport = await RpcHttp2CallerTransport.connect(
-        host: '127.0.0.1',
-        port: server.port,
-      );
-      final caller = RpcCallerEndpoint(transport: transport);
-
-      for (var i = 0; i < 3; i++) {
-        final r = await caller
-            .unary<RpcString, RpcString>(
-              serviceName: 'Svc',
-              methodName: 'Quick',
-              request: '$i'.rpc,
-              requestCodec: _codec,
-              responseCodec: _codec,
-            )
-            .timeout(const Duration(seconds: 8));
-        expect(r.value, 'quick-ok');
-      }
-
-      await transport.close();
-      expect(transport.isClosed, isTrue);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
-
-  test(
-    'GUARD: close() is still prompt with nothing in flight',
-    () async {
-      server = RpcHttp2Server(
-        host: '127.0.0.1',
-        port: 0,
-        mode: RpcResponderMode(
-          (e) => e.registerServiceContract(_SlowContract()),
-        ),
-      );
-      await server.start();
-
-      final transport = await RpcHttp2CallerTransport.connect(
-        host: '127.0.0.1',
-        port: server.port,
-      );
-
-      final sw = Stopwatch()..start();
-      await transport.close();
-      sw.stop();
-      expect(sw.elapsed, lessThan(const Duration(milliseconds: 900)));
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    final sw = Stopwatch()..start();
+    await transport.close();
+    sw.stop();
+    expect(sw.elapsed, lessThan(const Duration(milliseconds: 900)));
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

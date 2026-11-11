@@ -268,41 +268,37 @@ Future<_Run> _run({required bool reconnect, bool finishFirstEarly = false}) {
 }
 
 void main() {
-  test(
-    'a reused peer id gets its OWN answer, not the parked one',
-    () async {
-      final r = await _run(reconnect: true);
+  test('a reused peer id gets its OWN answer, not the parked one', () async {
+    final r = await _run(reconnect: true);
 
-      expect(
-        r.openedOn,
-        [2, 2],
-        reason:
-            'the premise: the server endpoint is fresh, so it numbers from the '
-            'bottom and the second call lands on the first one\'s id',
-      );
-      expect(
-        r.repeatOpeningFrames,
-        isEmpty,
-        reason:
-            'the new call opened a stream the pipeline was still holding for '
-            'the old one, so its opening frame read as a repeat and the call '
-            'was never dispatched',
-      );
-      expect(
-        r.secondGot,
-        'answered two',
-        reason:
-            'the parked handler answered on this id first, and that answer '
-            'belongs to a caller on a connection that no longer exists',
-      );
-      expect(
-        r.stray,
-        isEmpty,
-        reason: 'nothing here may reach the root zone, on either side',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      r.openedOn,
+      [2, 2],
+      reason:
+          'the premise: the server endpoint is fresh, so it numbers from the '
+          'bottom and the second call lands on the first one\'s id',
+    );
+    expect(
+      r.repeatOpeningFrames,
+      isEmpty,
+      reason:
+          'the new call opened a stream the pipeline was still holding for '
+          'the old one, so its opening frame read as a repeat and the call '
+          'was never dispatched',
+    );
+    expect(
+      r.secondGot,
+      'answered two',
+      reason:
+          'the parked handler answered on this id first, and that answer '
+          'belongs to a caller on a connection that no longer exists',
+    );
+    expect(
+      r.stray,
+      isEmpty,
+      reason: 'nothing here may reach the root zone, on either side',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   test(
     'the dropped connection tells its handler, so the answer is not written',

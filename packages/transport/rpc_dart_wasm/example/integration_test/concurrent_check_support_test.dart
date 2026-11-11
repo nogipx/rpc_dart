@@ -17,28 +17,24 @@ import 'package:rpc_dart_wasm/rpc_dart_wasm.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets(
-    'concurrent checkSupport calls agree',
-    (_) async {
-      final single = await RpcFlutterWasmBridge.checkSupport().timeout(
-        const Duration(seconds: 30),
-      );
+  testWidgets('concurrent checkSupport calls agree', (_) async {
+    final single = await RpcFlutterWasmBridge.checkSupport().timeout(
+      const Duration(seconds: 30),
+    );
 
-      final answers = await Future.wait([
-        for (var i = 0; i < 4; i++)
-          RpcFlutterWasmBridge.checkSupport()
-              .timeout(const Duration(seconds: 30))
-              .then((s) => '${s.canRunDartWasm}')
-              .catchError((Object e) => 'ERR ${e.runtimeType}'),
-      ]);
-      // ignore: avoid_print
-      print(
-        'platform: ${Platform.operatingSystem}  single: ${single.canRunDartWasm}'
-        '  concurrent: $answers',
-      );
+    final answers = await Future.wait([
+      for (var i = 0; i < 4; i++)
+        RpcFlutterWasmBridge.checkSupport()
+            .timeout(const Duration(seconds: 30))
+            .then((s) => '${s.canRunDartWasm}')
+            .catchError((Object e) => 'ERR ${e.runtimeType}'),
+    ]);
+    // ignore: avoid_print
+    print(
+      'platform: ${Platform.operatingSystem}  single: ${single.canRunDartWasm}'
+      '  concurrent: $answers',
+    );
 
-      expect(answers, everyElement('${single.canRunDartWasm}'));
-    },
-    timeout: const Timeout(Duration(minutes: 2)),
-  );
+    expect(answers, everyElement('${single.canRunDartWasm}'));
+  }, timeout: const Timeout(Duration(minutes: 2)));
 }

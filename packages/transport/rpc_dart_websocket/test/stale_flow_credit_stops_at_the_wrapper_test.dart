@@ -130,88 +130,68 @@ void main() {
 
   // CONTROL: crediting must still work, or the guard has replaced an over-grant
   // with a stall. Same rig, same call, an id that IS live here.
-  test(
-    'CONTROL: a credit for a live id still grants',
-    () async {
-      final one = _pair();
-      final server = RpcWebSocketResponderTransport(
-        one.server,
-        policy: _policy,
-      );
-      addTearDown(() async {
-        await server.close().catchError((Object _) {});
-      });
-      final connection = await _connect([one.client]);
-      final client = connection.transport;
+  test('CONTROL: a credit for a live id still grants', () async {
+    final one = _pair();
+    final server = RpcWebSocketResponderTransport(one.server, policy: _policy);
+    addTearDown(() async {
+      await server.close().catchError((Object _) {});
+    });
+    final connection = await _connect([one.client]);
+    final client = connection.transport;
 
-      final liveId = server.createStream();
-      await server.sendMetadata(
-        liveId,
-        RpcMetadata.forClientRequest('Svc', 'm'),
-      );
-      await _settle();
+    final liveId = server.createStream();
+    await server.sendMetadata(liveId, RpcMetadata.forClientRequest('Svc', 'm'));
+    await _settle();
 
-      final before = one.frames;
-      client.flowCredit!.returnFlowCredit(liveId, _window);
-      await _settle();
+    final before = one.frames;
+    client.flowCredit!.returnFlowCredit(liveId, _window);
+    await _settle();
 
-      expect(
-        one.frames - before,
-        1,
-        reason:
-            'the guard dropped a credit for a stream live on this connection, so '
-            'its window is never replenished',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(
+      one.frames - before,
+      1,
+      reason:
+          'the guard dropped a credit for a stream live on this connection, so '
+          'its window is never replenished',
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
   // GUARD: the send paths must keep their own guard, and a change that loosened
   // it would not show up above.
-  test(
-    'GUARD: a send for a stale id is still dropped',
-    () async {
-      final one = _pair();
-      final two = _pair();
-      final server1 = RpcWebSocketResponderTransport(
-        one.server,
-        policy: _policy,
-      );
-      addTearDown(() async {
-        await server1.close().catchError((Object _) {});
-      });
-      final connection = await _connect([one.client, two.client]);
-      final client = connection.transport;
+  test('GUARD: a send for a stale id is still dropped', () async {
+    final one = _pair();
+    final two = _pair();
+    final server1 = RpcWebSocketResponderTransport(one.server, policy: _policy);
+    addTearDown(() async {
+      await server1.close().catchError((Object _) {});
+    });
+    final connection = await _connect([one.client, two.client]);
+    final client = connection.transport;
 
-      final staleId = server1.createStream();
-      await server1.sendMetadata(
-        staleId,
-        RpcMetadata.forClientRequest('Svc', 'm'),
-      );
-      await _settle();
+    final staleId = server1.createStream();
+    await server1.sendMetadata(
+      staleId,
+      RpcMetadata.forClientRequest('Svc', 'm'),
+    );
+    await _settle();
 
-      final server2 = RpcWebSocketResponderTransport(
-        two.server,
-        policy: _policy,
-      );
-      addTearDown(() async {
-        await server2.close().catchError((Object _) {});
-      });
-      await _reconnect(connection);
-      await _settle();
+    final server2 = RpcWebSocketResponderTransport(two.server, policy: _policy);
+    addTearDown(() async {
+      await server2.close().catchError((Object _) {});
+    });
+    await _reconnect(connection);
+    await _settle();
 
-      final before = two.frames;
-      await client.sendMetadata(
-        staleId,
-        RpcMetadata([const RpcHeader('x-probe-stale', '1')]),
-        endStream: true,
-      );
-      await _settle();
+    final before = two.frames;
+    await client.sendMetadata(
+      staleId,
+      RpcMetadata([const RpcHeader('x-probe-stale', '1')]),
+      endStream: true,
+    );
+    await _settle();
 
-      expect(two.frames - before, 0);
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(two.frames - before, 0);
+  }, timeout: const Timeout(Duration(seconds: 30)));
 }
 
 // ── an in-memory socket that counts what the wrapper writes to it ────────────

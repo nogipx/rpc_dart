@@ -104,22 +104,18 @@ void main() {
     return (_Asking(await built.future), answering);
   }
 
-  test(
-    'a peer client answers a call the server started',
-    () async {
-      final (asking, answering) = await connectPair();
+  test('a peer client answers a call the server started', () async {
+    final (asking, answering) = await connectPair();
 
-      expect(
-        await asking.ask('hello').timeout(const Duration(seconds: 10)),
-        'answered hello',
-        reason:
-            'the response went out on an id the client did not mint, so the '
-            'send guard dropped every frame of it',
-      );
-      expect(answering.calls, 1);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      await asking.ask('hello').timeout(const Duration(seconds: 10)),
+      'answered hello',
+      reason:
+          'the response went out on an id the client did not mint, so the '
+          'send guard dropped every frame of it',
+    );
+    expect(answering.calls, 1);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   test(
     'it goes on answering, so the id set does not leak or go stale',
@@ -139,27 +135,23 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
-  test(
-    'calls in BOTH directions share the connection',
-    () async {
-      // The client still has to be able to call the server, which is what the
-      // guard was protecting in the first place.
-      final (asking, _) = await connectPair();
-      final serverPeer = await () async {
-        final endpoint = asking.endpoint;
-        endpoint.registerServiceContract(_Answering(endpoint));
-        return endpoint;
-      }();
-      expect(serverPeer.isActive, isTrue);
+  test('calls in BOTH directions share the connection', () async {
+    // The client still has to be able to call the server, which is what the
+    // guard was protecting in the first place.
+    final (asking, _) = await connectPair();
+    final serverPeer = await () async {
+      final endpoint = asking.endpoint;
+      endpoint.registerServiceContract(_Answering(endpoint));
+      return endpoint;
+    }();
+    expect(serverPeer.isActive, isTrue);
 
-      final fromClient = _Asking(clientPeer);
-      final results = await Future.wait([
-        asking.ask('down'),
-        fromClient.ask('up'),
-      ]).timeout(const Duration(seconds: 15));
+    final fromClient = _Asking(clientPeer);
+    final results = await Future.wait([
+      asking.ask('down'),
+      fromClient.ask('up'),
+    ]).timeout(const Duration(seconds: 15));
 
-      expect(results, ['answered down', 'answered up']);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(results, ['answered down', 'answered up']);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

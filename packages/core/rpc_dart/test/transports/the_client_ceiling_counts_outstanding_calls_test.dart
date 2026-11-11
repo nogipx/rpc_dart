@@ -131,62 +131,54 @@ Future<String> _call(
 }
 
 void main() {
-  test(
-    'WITNESS a call parked on its response still holds its slot',
-    () async {
-      final release = Completer<void>();
-      final rig = _rig(4, release.future);
+  test('WITNESS a call parked on its response still holds its slot', () async {
+    final release = Completer<void>();
+    final rig = _rig(4, release.future);
 
-      // Four calls that have half-closed and are waiting. The ceiling is full.
-      final parked = [
-        for (var i = 0; i < 4; i++)
-          _call(
-            rig.caller,
-            'wait',
-            context: RpcContext.empty().withTimeout(
-              const Duration(seconds: 30),
-            ),
-          ),
-      ];
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+    // Four calls that have half-closed and are waiting. The ceiling is full.
+    final parked = [
+      for (var i = 0; i < 4; i++)
+        _call(
+          rig.caller,
+          'wait',
+          context: RpcContext.empty().withTimeout(const Duration(seconds: 30)),
+        ),
+    ];
+    await Future<void>.delayed(const Duration(milliseconds: 300));
 
-      // NOT awaited to completion: a refusal is immediate and an admission parks
-      // for as long as the handler does, so waiting for all four would fail as a
-      // TIMEOUT and say nothing about which happened.
-      final second = [
-        for (var i = 0; i < 4; i++)
-          _call(
-            rig.caller,
-            'wait',
-            context: RpcContext.empty().withTimeout(
-              const Duration(seconds: 30),
-            ),
-          ),
-      ];
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+    // NOT awaited to completion: a refusal is immediate and an admission parks
+    // for as long as the handler does, so waiting for all four would fail as a
+    // TIMEOUT and say nothing about which happened.
+    final second = [
+      for (var i = 0; i < 4; i++)
+        _call(
+          rig.caller,
+          'wait',
+          context: RpcContext.empty().withTimeout(const Duration(seconds: 30)),
+        ),
+    ];
+    await Future<void>.delayed(const Duration(milliseconds: 300));
 
-      var refused = 0;
-      for (final c in second) {
-        final outcome = await c.timeout(
-          const Duration(milliseconds: 50),
-          onTimeout: () => 'still parked',
-        );
-        if (outcome == 'refused') refused++;
-      }
-
-      expect(
-        refused,
-        4,
-        reason:
-            'the slot was released at half-close, so four outstanding calls left '
-            'the whole ceiling free',
+    var refused = 0;
+    for (final c in second) {
+      final outcome = await c.timeout(
+        const Duration(milliseconds: 50),
+        onTimeout: () => 'still parked',
       );
+      if (outcome == 'refused') refused++;
+    }
 
-      release.complete();
-      await Future.wait([...parked, ...second]);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      refused,
+      4,
+      reason:
+          'the slot was released at half-close, so four outstanding calls left '
+          'the whole ceiling free',
+    );
+
+    release.complete();
+    await Future.wait([...parked, ...second]);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   group('every ending returns the slot', () {
     // The half that runs the wrong way. Each of these runs ceiling + 2 calls
@@ -266,36 +258,30 @@ void main() {
     }, timeout: const Timeout(Duration(seconds: 60)));
   });
 
-  test(
-    'CONTROL the ceiling still refuses when the slots ARE held',
-    () async {
-      // Without this, every "no refusals" assertion above is equally consistent
-      // with a ceiling that does nothing at all.
-      final rig = _rig(2, Completer<void>().future);
-      final calls = [
-        for (var i = 0; i < 4; i++)
-          _call(
-            rig.caller,
-            'wait',
-            context: RpcContext.empty().withTimeout(
-              const Duration(seconds: 20),
-            ),
-          ),
-      ];
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+  test('CONTROL the ceiling still refuses when the slots ARE held', () async {
+    // Without this, every "no refusals" assertion above is equally consistent
+    // with a ceiling that does nothing at all.
+    final rig = _rig(2, Completer<void>().future);
+    final calls = [
+      for (var i = 0; i < 4; i++)
+        _call(
+          rig.caller,
+          'wait',
+          context: RpcContext.empty().withTimeout(const Duration(seconds: 20)),
+        ),
+    ];
+    await Future<void>.delayed(const Duration(milliseconds: 300));
 
-      // The two that got in are still parked; the other two were refused straight
-      // away, so their futures have already completed.
-      var refused = 0;
-      for (final c in calls) {
-        final outcome = await c.timeout(
-          const Duration(milliseconds: 50),
-          onTimeout: () => 'still parked',
-        );
-        if (outcome == 'refused') refused++;
-      }
-      expect(refused, 2, reason: 'two slots held, two calls refused');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    // The two that got in are still parked; the other two were refused straight
+    // away, so their futures have already completed.
+    var refused = 0;
+    for (final c in calls) {
+      final outcome = await c.timeout(
+        const Duration(milliseconds: 50),
+        onTimeout: () => 'still parked',
+      );
+      if (outcome == 'refused') refused++;
+    }
+    expect(refused, 2, reason: 'two slots held, two calls refused');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

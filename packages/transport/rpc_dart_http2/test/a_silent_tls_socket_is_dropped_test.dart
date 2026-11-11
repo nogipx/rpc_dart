@@ -87,28 +87,24 @@ void main() {
     return server;
   }
 
-  test(
-    'WITNESS a TLS socket that sends nothing is dropped',
-    () async {
-      final server = await serve();
-      final socket = await Socket.connect('127.0.0.1', server.port);
-      addTearDown(socket.destroy);
-      final closed = Completer<String>();
-      socket.listen(
-        null,
-        onDone: () => closed.complete('closed'),
-        onError: (Object e) => closed.complete('error'),
-      );
+  test('WITNESS a TLS socket that sends nothing is dropped', () async {
+    final server = await serve();
+    final socket = await Socket.connect('127.0.0.1', server.port);
+    addTearDown(socket.destroy);
+    final closed = Completer<String>();
+    socket.listen(
+      null,
+      onDone: () => closed.complete('closed'),
+      onError: (Object e) => closed.complete('error'),
+    );
 
-      final outcome = await closed.future.timeout(
-        _prefaceTimeout * 10,
-        onTimeout: () => 'still open',
-      );
+    final outcome = await closed.future.timeout(
+      _prefaceTimeout * 10,
+      onTimeout: () => 'still open',
+    );
 
-      expect(outcome, isNot('still open'));
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(outcome, isNot('still open'));
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   test('GUARD a TLS client is served', () async {
     final server = await serve();

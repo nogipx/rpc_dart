@@ -100,34 +100,30 @@ Future<int> _until(int Function() read, int want, Duration budget) async {
 }
 
 void main() {
-  test(
-    'a socket that never speaks HTTP/2 is dropped',
-    () async {
-      // WITNESS. Pre-fix the endpoints stayed at 8 for as long as the peer held
-      // the socket, and nothing counted them.
-      final server = await _serve(prefaceTimeout: _prefaceTimeout);
-      await _open(server.port, _sockets, speak: false);
+  test('a socket that never speaks HTTP/2 is dropped', () async {
+    // WITNESS. Pre-fix the endpoints stayed at 8 for as long as the peer held
+    // the socket, and nothing counted them.
+    final server = await _serve(prefaceTimeout: _prefaceTimeout);
+    await _open(server.port, _sockets, speak: false);
 
-      // Wait for the RISE first: "endpoints 0" would also pass on a server the
-      // connections never reached.
-      expect(
-        await _until(
-          () => server.endpoints.length,
-          _sockets,
-          const Duration(seconds: 5),
-        ),
+    // Wait for the RISE first: "endpoints 0" would also pass on a server the
+    // connections never reached.
+    expect(
+      await _until(
+        () => server.endpoints.length,
         _sockets,
-        reason: 'every silent socket must first BE an endpoint',
-      );
+        const Duration(seconds: 5),
+      ),
+      _sockets,
+      reason: 'every silent socket must first BE an endpoint',
+    );
 
-      expect(
-        await _until(() => server.endpoints.length, 0, _prefaceTimeout * 10),
-        0,
-        reason: 'and then be dropped at the deadline',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      await _until(() => server.endpoints.length, 0, _prefaceTimeout * 10),
+      0,
+      reason: 'and then be dropped at the deadline',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   test(
     'a deadline and a keepalive tick in the same turn do not crash the server',
@@ -170,56 +166,48 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
-  test(
-    'GUARD: a peer that sends the preface is kept',
-    () async {
-      // The deadline must bound silence, not connections. Without this the
-      // witness would pass on a server that dropped everything.
-      final server = await _serve(prefaceTimeout: _prefaceTimeout);
-      await _open(server.port, _sockets, speak: true);
+  test('GUARD: a peer that sends the preface is kept', () async {
+    // The deadline must bound silence, not connections. Without this the
+    // witness would pass on a server that dropped everything.
+    final server = await _serve(prefaceTimeout: _prefaceTimeout);
+    await _open(server.port, _sockets, speak: true);
 
-      expect(
-        await _until(
-          () => server.endpoints.length,
-          _sockets,
-          const Duration(seconds: 5),
-        ),
+    expect(
+      await _until(
+        () => server.endpoints.length,
         _sockets,
-      );
-      await Future<void>.delayed(_prefaceTimeout * 4);
-      expect(
-        server.endpoints.length,
-        _sockets,
-        reason: 'speaking HTTP/2 disarms the deadline, and nothing else does',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+        const Duration(seconds: 5),
+      ),
+      _sockets,
+    );
+    await Future<void>.delayed(_prefaceTimeout * 4);
+    expect(
+      server.endpoints.length,
+      _sockets,
+      reason: 'speaking HTTP/2 disarms the deadline, and nothing else does',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD: an ordinary call still works',
-    () async {
-      // The whole point is that a real client is untouched.
-      final server = await _serve(prefaceTimeout: _prefaceTimeout);
-      final caller = RpcCallerEndpoint(
-        transport: await RpcHttp2CallerTransport.connect(
-          host: '127.0.0.1',
-          port: server.port,
-        ),
-      );
-      addTearDown(caller.close);
+  test('GUARD: an ordinary call still works', () async {
+    // The whole point is that a real client is untouched.
+    final server = await _serve(prefaceTimeout: _prefaceTimeout);
+    final caller = RpcCallerEndpoint(
+      transport: await RpcHttp2CallerTransport.connect(
+        host: '127.0.0.1',
+        port: server.port,
+      ),
+    );
+    addTearDown(caller.close);
 
-      final response = await caller
-          .unary<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'echo',
-            request: 'hi'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          )
-          .timeout(const Duration(seconds: 15));
-      expect(response.value, 'hi');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    final response = await caller
+        .unary<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'echo',
+          request: 'hi'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .timeout(const Duration(seconds: 15));
+    expect(response.value, 'hi');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

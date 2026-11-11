@@ -96,46 +96,34 @@ Future<_Run> _call({required String? mountAt}) async {
 }
 
 void main() {
-  test(
-    'WITNESS: a handler mounted under a prefix still routes',
-    () async {
-      final run = await _call(mountAt: 'rpc');
+  test('WITNESS: a handler mounted under a prefix still routes', () async {
+    final run = await _call(mountAt: 'rpc');
 
-      expect(
-        run.sawPath,
-        '/Echo/echo',
-        reason:
-            'the transport routed on the WHOLE request path, so a mount turns '
-            'every method into one it has never heard of',
-      );
-      expect(run.outcome, 'ok: echo:hi');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      run.sawPath,
+      '/Echo/echo',
+      reason:
+          'the transport routed on the WHOLE request path, so a mount turns '
+          'every method into one it has never heard of',
+    );
+    expect(run.outcome, 'ok: echo:hi');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   // CONTROL: unmounted, where `url` and `requestedUri.path` agree. That agreement is
   // why the defect went unnoticed, and it is what a fix could break instead.
-  test(
-    'CONTROL: an unmounted handler is unchanged',
-    () async {
-      final run = await _call(mountAt: null);
+  test('CONTROL: an unmounted handler is unchanged', () async {
+    final run = await _call(mountAt: null);
 
-      expect(run.sawPath, '/Echo/echo');
-      expect(run.outcome, 'ok: echo:hi');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(run.sawPath, '/Echo/echo');
+    expect(run.outcome, 'ok: echo:hi');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   // CONTROL: a deeper mount, because one prefix level could be stripped by accident
   // — by a `split('/')` that happens to drop the right number of segments.
-  test(
-    'CONTROL: two prefix levels work too',
-    () async {
-      final run = await _call(mountAt: 'api/v1');
+  test('CONTROL: two prefix levels work too', () async {
+    final run = await _call(mountAt: 'api/v1');
 
-      expect(run.sawPath, '/Echo/echo');
-      expect(run.outcome, 'ok: echo:hi');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(run.sawPath, '/Echo/echo');
+    expect(run.outcome, 'ok: echo:hi');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

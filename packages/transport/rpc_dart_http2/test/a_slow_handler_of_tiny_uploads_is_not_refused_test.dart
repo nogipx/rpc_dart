@@ -52,41 +52,37 @@ Stream<RpcString> _requests() async* {
 }
 
 void main() {
-  test(
-    'WITNESS a slightly slow handler receives every tiny upload',
-    () async {
-      final server = RpcHttp2Server(
+  test('WITNESS a slightly slow handler receives every tiny upload', () async {
+    final server = RpcHttp2Server(
+      host: '127.0.0.1',
+      port: 0,
+      // 20000 messages of 2 payload bytes are 40 KB by payload, inside this
+      // bound, and 2.6 MB with a 128-byte charge each, far past it.
+      policy: const RpcSecurityPolicy(maxBufferedBytes: 256 * 1024),
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
+    );
+    await server.start();
+    final caller = RpcCallerEndpoint(
+      transport: await RpcHttp2CallerTransport.connect(
         host: '127.0.0.1',
-        port: 0,
-        // 20000 messages of 2 payload bytes are 40 KB by payload, inside this
-        // bound, and 2.6 MB with a 128-byte charge each, far past it.
-        policy: const RpcSecurityPolicy(maxBufferedBytes: 256 * 1024),
-        mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
-      );
-      await server.start();
-      final caller = RpcCallerEndpoint(
-        transport: await RpcHttp2CallerTransport.connect(
-          host: '127.0.0.1',
-          port: server.port,
-        ),
-      );
-      addTearDown(() async {
-        await caller.close();
-        await server.stop();
-      });
+        port: server.port,
+      ),
+    );
+    addTearDown(() async {
+      await caller.close();
+      await server.stop();
+    });
 
-      final response = await caller
-          .clientStream<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'Upload',
-            requestCodec: _codec,
-            responseCodec: _codec,
-            requests: _requests(),
-          )
-          .timeout(const Duration(seconds: 60));
+    final response = await caller
+        .clientStream<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'Upload',
+          requestCodec: _codec,
+          responseCodec: _codec,
+          requests: _requests(),
+        )
+        .timeout(const Duration(seconds: 60));
 
-      expect(response.value, '$_count');
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    expect(response.value, '$_count');
+  }, timeout: const Timeout(Duration(seconds: 90)));
 }

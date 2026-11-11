@@ -62,106 +62,102 @@ final class _Svc extends RpcResponderContract {
 }
 
 void main() {
-  test(
-    'a drain stops admitting new calls, it does not just wait',
-    () async {
-      final http = await HttpServer.bind('127.0.0.1', 0);
-      final server = RpcWebSocketServer(
-        connections: rpcWebSocketConnections(http),
-        mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
-      );
-      await server.start();
+  test('a drain stops admitting new calls, it does not just wait', () async {
+    final http = await HttpServer.bind('127.0.0.1', 0);
+    final server = RpcWebSocketServer(
+      connections: rpcWebSocketConnections(http),
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
+    );
+    await server.start();
 
-      final transport = await RpcWebSocketCallerTransport.connect(
-        Uri.parse('ws://127.0.0.1:${http.port}'),
-      );
-      final caller = RpcCallerEndpoint(transport: transport);
+    final transport = await RpcWebSocketCallerTransport.connect(
+      Uri.parse('ws://127.0.0.1:${http.port}'),
+    );
+    final caller = RpcCallerEndpoint(transport: transport);
 
-      // Hold the in-flight count above zero for the whole budget.
-      final parked = <StreamSubscription<RpcString>>[];
-      final answered = <Future<void>>[];
-      for (var i = 0; i < 8; i++) {
-        final got = Completer<void>();
-        parked.add(
-          caller
-              .serverStream<RpcString, RpcString>(
+    // Hold the in-flight count above zero for the whole budget.
+    final parked = <StreamSubscription<RpcString>>[];
+    final answered = <Future<void>>[];
+    for (var i = 0; i < 8; i++) {
+      final got = Completer<void>();
+      parked.add(
+        caller
+            .serverStream<RpcString, RpcString>(
+              serviceName: 'Svc',
+              methodName: 'park',
+              request: 'x'.rpc,
+              requestCodec: _codec,
+              responseCodec: _codec,
+            )
+            .listen(
+              (_) {
+                if (!got.isCompleted) got.complete();
+              },
+              onError: (Object _) {
+                if (!got.isCompleted) got.complete();
+              },
+            ),
+      );
+      answered.add(got.future);
+    }
+    await Future.wait(answered).timeout(const Duration(seconds: 10));
+
+    var served = 0;
+    var refused = 0;
+    var shuttingDown = false;
+    var running = true;
+
+    Future<void> lane() async {
+      while (running) {
+        try {
+          final r = await caller
+              .unary<RpcString, RpcString>(
                 serviceName: 'Svc',
-                methodName: 'park',
+                methodName: 'echo',
                 request: 'x'.rpc,
                 requestCodec: _codec,
                 responseCodec: _codec,
               )
-              .listen(
-                (_) {
-                  if (!got.isCompleted) got.complete();
-                },
-                onError: (Object _) {
-                  if (!got.isCompleted) got.complete();
-                },
-              ),
-        );
-        answered.add(got.future);
-      }
-      await Future.wait(answered).timeout(const Duration(seconds: 10));
-
-      var served = 0;
-      var refused = 0;
-      var shuttingDown = false;
-      var running = true;
-
-      Future<void> lane() async {
-        while (running) {
-          try {
-            final r = await caller
-                .unary<RpcString, RpcString>(
-                  serviceName: 'Svc',
-                  methodName: 'echo',
-                  request: 'x'.rpc,
-                  requestCodec: _codec,
-                  responseCodec: _codec,
-                )
-                .timeout(const Duration(seconds: 2));
-            if (shuttingDown && r.value == 'ok') served++;
-          } catch (_) {
-            if (shuttingDown) {
-              refused++;
-              await Future<void>.delayed(const Duration(milliseconds: 20));
-            }
+              .timeout(const Duration(seconds: 2));
+          if (shuttingDown && r.value == 'ok') served++;
+        } catch (_) {
+          if (shuttingDown) {
+            refused++;
+            await Future<void>.delayed(const Duration(milliseconds: 20));
           }
         }
       }
+    }
 
-      unawaited(Future.wait(List.generate(4, (_) => lane())));
-      await Future<void>.delayed(const Duration(milliseconds: 400));
+    unawaited(Future.wait(List.generate(4, (_) => lane())));
+    await Future<void>.delayed(const Duration(milliseconds: 400));
 
-      shuttingDown = true;
-      await server.stop(drainTimeout: const Duration(seconds: 3));
-      running = false;
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+    shuttingDown = true;
+    await server.stop(drainTimeout: const Duration(seconds: 3));
+    running = false;
+    await Future<void>.delayed(const Duration(milliseconds: 200));
 
-      // WITNESS. This was 1347 before the drain marked its endpoints.
-      expect(
-        served,
-        lessThan(50),
-        reason:
-            'the drain admitted $served new calls after shutdown began; it is '
-            'supposed to stop admitting, not merely wait',
-      );
-      // GUARD: the calls have to be REFUSED, not hang. A drain that silently
-      // dropped them would also score a low `served`.
-      expect(
-        refused,
-        greaterThan(0),
-        reason: 'calls during the drain must be answered UNAVAILABLE, not lost',
-      );
+    // WITNESS. This was 1347 before the drain marked its endpoints.
+    expect(
+      served,
+      lessThan(50),
+      reason:
+          'the drain admitted $served new calls after shutdown began; it is '
+          'supposed to stop admitting, not merely wait',
+    );
+    // GUARD: the calls have to be REFUSED, not hang. A drain that silently
+    // dropped them would also score a low `served`.
+    expect(
+      refused,
+      greaterThan(0),
+      reason: 'calls during the drain must be answered UNAVAILABLE, not lost',
+    );
 
-      for (final s in parked) {
-        unawaited(s.cancel());
-      }
-      await caller.close().catchError((_) {});
-      await transport.close().catchError((_) {});
-      await http.close(force: true);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    for (final s in parked) {
+      unawaited(s.cancel());
+    }
+    await caller.close().catchError((_) {});
+    await transport.close().catchError((_) {});
+    await http.close(force: true);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

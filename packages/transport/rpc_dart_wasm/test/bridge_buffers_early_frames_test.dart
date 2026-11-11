@@ -117,23 +117,19 @@ void main() {
     timeout: const Timeout(Duration(minutes: 2)),
   );
 
-  test(
-    'GUARD: the core channel pair bounds it the same way',
-    () async {
-      // Load-bearing: without this, the assertion above would also pass on a
-      // build where flow control had stopped working altogether.
-      final (client, server) = RpcChannelTransport.pair(policy: _policy);
-      addTearDown(() async {
-        await client.close();
-        await server.close();
-      });
+  test('GUARD: the core channel pair bounds it the same way', () async {
+    // Load-bearing: without this, the assertion above would also pass on a
+    // build where flow control had stopped working altogether.
+    final (client, server) = RpcChannelTransport.pair(policy: _policy);
+    addTearDown(() async {
+      await client.close();
+      await server.close();
+    });
 
-      final pushed = await _bytesInFlight(server, client);
-      expect(pushed, lessThanOrEqualTo(_connWindow + _streamWindow));
-      expect(pushed, greaterThan(0));
-    },
-    timeout: const Timeout(Duration(minutes: 2)),
-  );
+    final pushed = await _bytesInFlight(server, client);
+    expect(pushed, lessThanOrEqualTo(_connWindow + _streamWindow));
+    expect(pushed, greaterThan(0));
+  }, timeout: const Timeout(Duration(minutes: 2)));
 
   test('GUARD: a frame sent before the transport binds is delivered', () async {
     // The mechanism itself, without flow control in the way: bytes handed to a

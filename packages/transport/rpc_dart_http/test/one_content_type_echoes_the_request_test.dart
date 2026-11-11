@@ -173,11 +173,9 @@ void main() {
         requestContentType: hostile,
         responseHeaders: coreSendsAContentType,
       );
-      expect(
-        _contentTypes(response),
-        ['application/grpc'],
-        reason: 'a subtype that is not a token degrades to the bare form',
-      );
+      expect(_contentTypes(response), [
+        'application/grpc',
+      ], reason: 'a subtype that is not a token degrades to the bare form');
     }
   });
 

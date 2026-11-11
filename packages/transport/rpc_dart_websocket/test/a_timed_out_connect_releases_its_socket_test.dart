@@ -163,42 +163,38 @@ void main() {
 
   // GUARD: and an open with NO timeout is unchanged — it gets no private client,
   // so there is nothing to close and nothing to get wrong.
-  test(
-    'GUARD: an unbounded open still works',
-    () async {
-      final http = await HttpServer.bind('127.0.0.1', 0);
-      final server = RpcWebSocketServer.createWithContracts(
-        connections: rpcWebSocketConnections(http),
-        contracts: [_Echo()..setup()],
-      );
-      await server.start();
-      addTearDown(() async {
-        await server.dispose().catchError((Object _) {});
-        await http.close(force: true);
-      });
+  test('GUARD: an unbounded open still works', () async {
+    final http = await HttpServer.bind('127.0.0.1', 0);
+    final server = RpcWebSocketServer.createWithContracts(
+      connections: rpcWebSocketConnections(http),
+      contracts: [_Echo()..setup()],
+    );
+    await server.start();
+    addTearDown(() async {
+      await server.dispose().catchError((Object _) {});
+      await http.close(force: true);
+    });
 
-      final channel = await openWebSocket(
-        Uri.parse('ws://127.0.0.1:${http.port}/'),
-      );
-      final caller = RpcCallerEndpoint(
-        transport: RpcWebSocketCallerTransport(channel),
-      );
-      addTearDown(() => caller.close().catchError((Object _) {}));
+    final channel = await openWebSocket(
+      Uri.parse('ws://127.0.0.1:${http.port}/'),
+    );
+    final caller = RpcCallerEndpoint(
+      transport: RpcWebSocketCallerTransport(channel),
+    );
+    addTearDown(() => caller.close().catchError((Object _) {}));
 
-      final reply = await caller
-          .unary<RpcString, RpcString>(
-            serviceName: 'Echo',
-            methodName: 'echo',
-            request: 'hi'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          )
-          .timeout(const Duration(seconds: 10));
+    final reply = await caller
+        .unary<RpcString, RpcString>(
+          serviceName: 'Echo',
+          methodName: 'echo',
+          request: 'hi'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .timeout(const Duration(seconds: 10));
 
-      expect(reply.value, 'echo:hi');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(reply.value, 'echo:hi');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }
 
 final class _Echo extends RpcResponderContract {

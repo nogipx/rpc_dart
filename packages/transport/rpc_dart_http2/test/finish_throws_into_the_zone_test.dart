@@ -82,109 +82,97 @@ Future<List<Object>> escaped(Future<void> Function() body) async {
 }
 
 void main() {
-  test(
-    'finish() alone throws into the zone',
-    () async {
-      final server = await _serve();
-      addTearDown(server.stop);
+  test('finish() alone throws into the zone', () async {
+    final server = await _serve();
+    addTearDown(server.stop);
 
+    final out = await escaped(() async {
+      final socket = await Socket.connect('127.0.0.1', server.port);
+      final conn = http2.ClientTransportConnection.viaSocket(socket);
+      await conn.finish();
+    });
+
+    expect(
+      out,
+      isNotEmpty,
+      reason:
+          'if this stops throwing, the transport comment above close() is '
+          'stale and B-35 can be closed',
+    );
+    expect(out.first, isA<StateError>());
+  }, timeout: const Timeout(Duration(seconds: 60)));
+
+  test('terminate() stays silent, live socket or dead', () async {
+    // The other half of the characterisation, and the reason
+    // `_discardConnection` may drop the future `terminate()` returns.
+    // `TransportConnection.terminate` is declared to return one, so a reader
+    // sees an unhandled async error waiting to happen — and its doc used to
+    // claim this method ran inside a zone, which it never did.
+    //
+    // The arms must sit beside the `finish()` one above: four silent rows mean
+    // "terminate is safe" only if something in the same rig is KNOWN to escape.
+    // A first version of this used a bare TCP listener as the peer and
+    // `finish()` never completed against it, so the control was absent and the
+    // silence read as proof.
+    final server = await _serve();
+    addTearDown(server.stop);
+
+    for (final destroy in [false, true]) {
       final out = await escaped(() async {
         final socket = await Socket.connect('127.0.0.1', server.port);
         final conn = http2.ClientTransportConnection.viaSocket(socket);
-        await conn.finish();
+        if (destroy) {
+          socket.destroy();
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        }
+        // Dropped, exactly as `_discardConnection` drops it. `unawaited` is an
+        // annotation and not a handler — it attaches nothing, so an error here
+        // would still reach the zone; it is only what satisfies
+        // `unawaited_futures` inside this async closure, where the shipped call
+        // site is synchronous and needs nothing.
+        unawaited(conn.terminate());
       });
 
       expect(
         out,
-        isNotEmpty,
+        isEmpty,
         reason:
-            'if this stops throwing, the transport comment above close() is '
-            'stale and B-35 can be closed',
+            'socket destroyed: $destroy — if this starts escaping, '
+            '_discardConnection owes the future a handler',
       );
-      expect(out.first, isA<StateError>());
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    }
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'terminate() stays silent, live socket or dead',
-    () async {
-      // The other half of the characterisation, and the reason
-      // `_discardConnection` may drop the future `terminate()` returns.
-      // `TransportConnection.terminate` is declared to return one, so a reader
-      // sees an unhandled async error waiting to happen — and its doc used to
-      // claim this method ran inside a zone, which it never did.
-      //
-      // The arms must sit beside the `finish()` one above: four silent rows mean
-      // "terminate is safe" only if something in the same rig is KNOWN to escape.
-      // A first version of this used a bare TCP listener as the peer and
-      // `finish()` never completed against it, so the control was absent and the
-      // silence read as proof.
-      final server = await _serve();
-      addTearDown(server.stop);
+  test('GUARD: a transport close reports nothing to the application', () async {
+    // The property that actually matters, and the reason B-35 is a lead rather
+    // than an incident: the transport's own close path does NOT reach the state
+    // above, so no application sees this today.
+    final server = await _serve();
+    addTearDown(server.stop);
 
-      for (final destroy in [false, true]) {
-        final out = await escaped(() async {
-          final socket = await Socket.connect('127.0.0.1', server.port);
-          final conn = http2.ClientTransportConnection.viaSocket(socket);
-          if (destroy) {
-            socket.destroy();
-            await Future<void>.delayed(const Duration(milliseconds: 50));
-          }
-          // Dropped, exactly as `_discardConnection` drops it. `unawaited` is an
-          // annotation and not a handler — it attaches nothing, so an error here
-          // would still reach the zone; it is only what satisfies
-          // `unawaited_futures` inside this async closure, where the shipped call
-          // site is synchronous and needs nothing.
-          unawaited(conn.terminate());
-        });
+    final out = await escaped(() async {
+      final t = await RpcHttp2CallerTransport.connect(
+        host: '127.0.0.1',
+        port: server.port,
+      );
+      final caller = RpcCallerEndpoint(transport: t);
+      final reply = await caller
+          .unary<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: 'Echo',
+            request: 'x'.rpc,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .timeout(const Duration(seconds: 10));
+      expect(reply.value, 'x');
 
-        expect(
-          out,
-          isEmpty,
-          reason:
-              'socket destroyed: $destroy — if this starts escaping, '
-              '_discardConnection owes the future a handler',
-        );
-      }
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+      await caller.close();
+      await t.close();
+      // Twice: the second runs against a connection the first tore down.
+      await t.close();
+    });
 
-  test(
-    'GUARD: a transport close reports nothing to the application',
-    () async {
-      // The property that actually matters, and the reason B-35 is a lead rather
-      // than an incident: the transport's own close path does NOT reach the state
-      // above, so no application sees this today.
-      final server = await _serve();
-      addTearDown(server.stop);
-
-      final out = await escaped(() async {
-        final t = await RpcHttp2CallerTransport.connect(
-          host: '127.0.0.1',
-          port: server.port,
-        );
-        final caller = RpcCallerEndpoint(transport: t);
-        final reply = await caller
-            .unary<RpcString, RpcString>(
-              serviceName: 'Svc',
-              methodName: 'Echo',
-              request: 'x'.rpc,
-              requestCodec: _codec,
-              responseCodec: _codec,
-            )
-            .timeout(const Duration(seconds: 10));
-        expect(reply.value, 'x');
-
-        await caller.close();
-        await t.close();
-        // Twice: the second runs against a connection the first tore down.
-        await t.close();
-      });
-
-      expect(out, isEmpty, reason: 'closing a transport must stay silent');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(out, isEmpty, reason: 'closing a transport must stay silent');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

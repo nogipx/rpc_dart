@@ -166,56 +166,44 @@ void main() {
     return (outcome: outcome, ms: watch.elapsedMilliseconds);
   }
 
-  test(
-    'keepalive turns a hung call on a dead path into a failure',
-    () async {
-      final r = await callAcrossRelay(
-        pingInterval: const Duration(seconds: 1),
-        freeze: true,
-      );
+  test('keepalive turns a hung call on a dead path into a failure', () async {
+    final r = await callAcrossRelay(
+      pingInterval: const Duration(seconds: 1),
+      freeze: true,
+    );
 
-      expect(
-        r.outcome,
-        isNot('HUNG'),
-        reason:
-            'without ping/pong nothing discovers a half-open path: the call '
-            'waits out its deadline while health() reports healthy',
-      );
-      expect(r.outcome, 'status ${RpcStatus.unavailable.code}');
-      // Detection costs about two ping intervals; assert an absolute bound
-      // rather than comparing two timed runs, which would measure the machine.
-      expect(
-        r.ms,
-        lessThan(6000),
-        reason: 'dart:io closes the socket after a pong is missed',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      r.outcome,
+      isNot('HUNG'),
+      reason:
+          'without ping/pong nothing discovers a half-open path: the call '
+          'waits out its deadline while health() reports healthy',
+    );
+    expect(r.outcome, 'status ${RpcStatus.unavailable.code}');
+    // Detection costs about two ping intervals; assert an absolute bound
+    // rather than comparing two timed runs, which would measure the machine.
+    expect(
+      r.ms,
+      lessThan(6000),
+      reason: 'dart:io closes the socket after a pong is missed',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'CONTROL: without keepalive the same call hangs',
-    () async {
-      // Documents the default, and is what makes the test above meaningful.
-      final r = await callAcrossRelay(
-        freeze: true,
-        patience: const Duration(seconds: 6),
-      );
-      expect(r.outcome, 'HUNG');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('CONTROL: without keepalive the same call hangs', () async {
+    // Documents the default, and is what makes the test above meaningful.
+    final r = await callAcrossRelay(
+      freeze: true,
+      patience: const Duration(seconds: 6),
+    );
+    expect(r.outcome, 'HUNG');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD: keepalive does not disturb a healthy connection',
-    () async {
-      final r = await callAcrossRelay(
-        pingInterval: const Duration(seconds: 1),
-        freeze: false,
-      );
-      expect(r.outcome, 'returned');
-      expect(r.ms, lessThan(2000));
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('GUARD: keepalive does not disturb a healthy connection', () async {
+    final r = await callAcrossRelay(
+      pingInterval: const Duration(seconds: 1),
+      freeze: false,
+    );
+    expect(r.outcome, 'returned');
+    expect(r.ms, lessThan(2000));
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

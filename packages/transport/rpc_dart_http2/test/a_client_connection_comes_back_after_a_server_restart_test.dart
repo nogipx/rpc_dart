@@ -113,41 +113,37 @@ void main() {
     timeout: const Timeout(Duration(seconds: 30)),
   );
 
-  test(
-    'GUARD the bare transport closes when its connection is lost',
-    () async {
-      final server = await _serve(0);
-      final transport = await RpcHttp2CallerTransport.connect(
-        host: '127.0.0.1',
-        port: server.port,
-      );
-      final caller = RpcCallerEndpoint(transport: transport);
-      addTearDown(() async {
-        await caller.close();
-        await transport.close();
-        await server.stop();
-      });
-      expect((await _call(caller)).value, 'x');
-
-      // The message stream ends, and carries no error: the end is the report.
-      final streamErrors = <Object>[];
-      final ended = Completer<void>();
-      final sub = transport.incomingMessages.listen(
-        (_) {},
-        onError: streamErrors.add,
-        onDone: ended.complete,
-      );
-      addTearDown(sub.cancel);
+  test('GUARD the bare transport closes when its connection is lost', () async {
+    final server = await _serve(0);
+    final transport = await RpcHttp2CallerTransport.connect(
+      host: '127.0.0.1',
+      port: server.port,
+    );
+    final caller = RpcCallerEndpoint(transport: transport);
+    addTearDown(() async {
+      await caller.close();
+      await transport.close();
       await server.stop();
-      await ended.future.timeout(
-        const Duration(seconds: 5),
-        onTimeout: () => fail(
-          'the server stopped and the transport message stream is still open',
-        ),
-      );
-      expect(transport.isClosed, isTrue);
-      expect(streamErrors, isEmpty);
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    });
+    expect((await _call(caller)).value, 'x');
+
+    // The message stream ends, and carries no error: the end is the report.
+    final streamErrors = <Object>[];
+    final ended = Completer<void>();
+    final sub = transport.incomingMessages.listen(
+      (_) {},
+      onError: streamErrors.add,
+      onDone: ended.complete,
+    );
+    addTearDown(sub.cancel);
+    await server.stop();
+    await ended.future.timeout(
+      const Duration(seconds: 5),
+      onTimeout: () => fail(
+        'the server stopped and the transport message stream is still open',
+      ),
+    );
+    expect(transport.isClosed, isTrue);
+    expect(streamErrors, isEmpty);
+  }, timeout: const Timeout(Duration(seconds: 30)));
 }

@@ -122,11 +122,9 @@ void main() {
         'x-kept': 'plain',
       });
 
-      expect(
-        ctx.headers.keys,
-        ['x-kept'],
-        reason: 'only the structural drops should have happened: $ctx',
-      );
+      expect(ctx.headers.keys, [
+        'x-kept',
+      ], reason: 'only the structural drops should have happened: $ctx');
     });
 
     // PAIRED with the above, per the rule that every "this input is rejected"

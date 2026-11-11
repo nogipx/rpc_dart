@@ -143,50 +143,46 @@ void main() {
     await server.stop().catchError((Object _) {});
   });
 
-  test(
-    'keepalive reclaims a half-open connection',
-    () async {
-      server = RpcHttp2Server(
-        host: '127.0.0.1',
-        port: 0,
-        pingInterval: const Duration(seconds: 1),
-        mode: RpcResponderMode((e) => e.registerServiceContract(_Contract())),
-      );
-      await server.start();
-      relay = await _FreezableRelay.start(server.port);
+  test('keepalive reclaims a half-open connection', () async {
+    server = RpcHttp2Server(
+      host: '127.0.0.1',
+      port: 0,
+      pingInterval: const Duration(seconds: 1),
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Contract())),
+    );
+    await server.start();
+    relay = await _FreezableRelay.start(server.port);
 
-      final transports = await _connectAndCall(relay!, 3);
-      addTearDown(() async {
-        for (final t in transports) {
-          await t.close().catchError((Object _) {});
-        }
-      });
-      expect(server.endpoints, hasLength(3), reason: 'connections are live');
+    final transports = await _connectAndCall(relay!, 3);
+    addTearDown(() async {
+      for (final t in transports) {
+        await t.close().catchError((Object _) {});
+      }
+    });
+    expect(server.endpoints, hasLength(3), reason: 'connections are live');
 
-      // The path goes dead: no FIN, no RST, just silence.
-      relay!.frozen = true;
+    // The path goes dead: no FIN, no RST, just silence.
+    relay!.frozen = true;
 
-      await pollUntil(
-        () => server.endpoints.isEmpty,
-        const Duration(seconds: 20),
-      );
+    await pollUntil(
+      () => server.endpoints.isEmpty,
+      const Duration(seconds: 20),
+    );
 
-      expect(
-        server.endpoints,
-        isEmpty,
-        reason: 'a half-open connection was never reclaimed',
-      );
-      expect(
-        _disposed,
-        3,
-        reason:
-            'closing the endpoint is what disposes the contracts; without it '
-            'the application keeps whatever they hold for the life of the '
-            'process',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    expect(
+      server.endpoints,
+      isEmpty,
+      reason: 'a half-open connection was never reclaimed',
+    );
+    expect(
+      _disposed,
+      3,
+      reason:
+          'closing the endpoint is what disposes the contracts; without it '
+          'the application keeps whatever they hold for the life of the '
+          'process',
+    );
+  }, timeout: const Timeout(Duration(seconds: 90)));
 
   test(
     'CONTROL: without keepalive the half-open connections are held',
@@ -221,86 +217,78 @@ void main() {
     timeout: const Timeout(Duration(seconds: 90)),
   );
 
-  test(
-    'GUARD: keepalive does not disturb a live connection',
-    () async {
-      // The load-bearing guard: a ping every second must not close a healthy
-      // connection, and calls must keep working across many ping intervals.
-      server = RpcHttp2Server(
-        host: '127.0.0.1',
-        port: 0,
-        pingInterval: const Duration(milliseconds: 300),
-        mode: RpcResponderMode((e) => e.registerServiceContract(_Contract())),
-      );
-      await server.start();
+  test('GUARD: keepalive does not disturb a live connection', () async {
+    // The load-bearing guard: a ping every second must not close a healthy
+    // connection, and calls must keep working across many ping intervals.
+    server = RpcHttp2Server(
+      host: '127.0.0.1',
+      port: 0,
+      pingInterval: const Duration(milliseconds: 300),
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Contract())),
+    );
+    await server.start();
 
-      final transport = await RpcHttp2CallerTransport.connect(
-        host: '127.0.0.1',
-        port: server.port,
-      );
-      final caller = RpcCallerEndpoint(transport: transport);
-      addTearDown(() async {
-        await caller.close().catchError((Object _) {});
-        await transport.close().catchError((Object _) {});
-      });
+    final transport = await RpcHttp2CallerTransport.connect(
+      host: '127.0.0.1',
+      port: server.port,
+    );
+    final caller = RpcCallerEndpoint(transport: transport);
+    addTearDown(() async {
+      await caller.close().catchError((Object _) {});
+      await transport.close().catchError((Object _) {});
+    });
 
-      for (var i = 0; i < 8; i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 250));
-        final r = await caller
-            .unary<RpcString, RpcString>(
-              serviceName: 'Svc',
-              methodName: 'Echo',
-              request: '$i'.rpc,
-              requestCodec: _codec,
-              responseCodec: _codec,
-            )
-            .timeout(const Duration(seconds: 8));
-        expect(r.value, 'echo-ok');
-      }
-      expect(server.endpoints, hasLength(1));
-      expect(_disposed, 0, reason: 'a live connection must not be reclaimed');
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
-
-  test(
-    'GUARD: a clean disconnect still reclaims, with keepalive on',
-    () async {
-      server = RpcHttp2Server(
-        host: '127.0.0.1',
-        port: 0,
-        pingInterval: const Duration(seconds: 1),
-        mode: RpcResponderMode((e) => e.registerServiceContract(_Contract())),
-      );
-      await server.start();
-
-      final transport = await RpcHttp2CallerTransport.connect(
-        host: '127.0.0.1',
-        port: server.port,
-      );
-      final caller = RpcCallerEndpoint(transport: transport);
+    for (var i = 0; i < 8; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 250));
       final r = await caller
           .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'Echo',
-            request: 'x'.rpc,
+            request: '$i'.rpc,
             requestCodec: _codec,
             responseCodec: _codec,
           )
           .timeout(const Duration(seconds: 8));
       expect(r.value, 'echo-ok');
-      expect(server.endpoints, hasLength(1));
+    }
+    expect(server.endpoints, hasLength(1));
+    expect(_disposed, 0, reason: 'a live connection must not be reclaimed');
+  }, timeout: const Timeout(Duration(seconds: 90)));
 
-      await caller.close().catchError((Object _) {});
-      await transport.close().catchError((Object _) {});
+  test('GUARD: a clean disconnect still reclaims, with keepalive on', () async {
+    server = RpcHttp2Server(
+      host: '127.0.0.1',
+      port: 0,
+      pingInterval: const Duration(seconds: 1),
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Contract())),
+    );
+    await server.start();
 
-      await pollUntil(
-        () => server.endpoints.isEmpty,
-        const Duration(seconds: 10),
-      );
-      expect(server.endpoints, isEmpty);
-      expect(_disposed, 1);
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    final transport = await RpcHttp2CallerTransport.connect(
+      host: '127.0.0.1',
+      port: server.port,
+    );
+    final caller = RpcCallerEndpoint(transport: transport);
+    final r = await caller
+        .unary<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'Echo',
+          request: 'x'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .timeout(const Duration(seconds: 8));
+    expect(r.value, 'echo-ok');
+    expect(server.endpoints, hasLength(1));
+
+    await caller.close().catchError((Object _) {});
+    await transport.close().catchError((Object _) {});
+
+    await pollUntil(
+      () => server.endpoints.isEmpty,
+      const Duration(seconds: 10),
+    );
+    expect(server.endpoints, isEmpty);
+    expect(_disposed, 1);
+  }, timeout: const Timeout(Duration(seconds: 90)));
 }

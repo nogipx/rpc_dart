@@ -116,11 +116,11 @@ void main() {
           .toList()
           .timeout(const Duration(seconds: 10));
 
-      expect(
-        got.map((e) => e.value),
-        ['p0', 'p1', 'p2'],
-        reason: 'a finite server stream round-trips here, buffered',
-      );
+      expect(got.map((e) => e.value), [
+        'p0',
+        'p1',
+        'p2',
+      ], reason: 'a finite server stream round-trips here, buffered');
     });
 
     // CHARACTERIZATION: buffered, not incremental. Nothing arrives until the

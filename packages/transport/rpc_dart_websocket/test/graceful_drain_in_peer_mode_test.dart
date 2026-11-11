@@ -93,37 +93,29 @@ void main() {
     return (call, await built.future);
   }
 
-  test(
-    'a drained stop lets a peer-mode call finish',
-    () async {
-      final (call, _) = await startSlowPeerCall();
+  test('a drained stop lets a peer-mode call finish', () async {
+    final (call, _) = await startSlowPeerCall();
 
-      await server.stop(drainTimeout: const Duration(seconds: 10));
+    await server.stop(drainTimeout: const Duration(seconds: 10));
 
-      expect(
-        await call.timeout(const Duration(seconds: 20)),
-        'returned finished',
-        reason:
-            'the drain read null for a peer endpoint, saw nothing in flight '
-            'and closed the endpoints on top of the call',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    expect(
+      await call.timeout(const Duration(seconds: 20)),
+      'returned finished',
+      reason:
+          'the drain read null for a peer endpoint, saw nothing in flight '
+          'and closed the endpoints on top of the call',
+    );
+  }, timeout: const Timeout(Duration(seconds: 90)));
 
-  test(
-    'a peer endpoint reports the call the drain polls for',
-    () async {
-      final (_, peer) = await startSlowPeerCall();
+  test('a peer endpoint reports the call the drain polls for', () async {
+    final (_, peer) = await startSlowPeerCall();
 
-      expect(
-        peer.collectEndpointMetrics().activeResponders,
-        1,
-        reason: 'this map IS what _inFlightCalls() reads',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    expect(
+      peer.collectEndpointMetrics().activeResponders,
+      1,
+      reason: 'this map IS what _inFlightCalls() reads',
+    );
+  }, timeout: const Timeout(Duration(seconds: 90)));
 
   // CONTROL: a forceful stop must still cut the call off, and correctly. The
   // drain is a capability, not the only behaviour.

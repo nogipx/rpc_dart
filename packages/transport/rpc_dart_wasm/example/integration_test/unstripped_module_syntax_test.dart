@@ -66,13 +66,9 @@ void main() {
   // GUARD, and the load-bearing one: the REAL glue must still boot. A check
   // that refused it would be a far worse defect than the one being fixed, and
   // every witness below would still pass.
-  testWidgets(
-    'GUARD: the real dart2wasm glue still boots',
-    (_) async {
-      expect(await _load(wasm, mjs), 'booted');
-    },
-    timeout: const Timeout(Duration(minutes: 5)),
-  );
+  testWidgets('GUARD: the real dart2wasm glue still boots', (_) async {
+    expect(await _load(wasm, mjs), 'booted');
+  }, timeout: const Timeout(Duration(minutes: 5)));
 
   // WITNESS: each form the strip does not handle must name itself.
   for (final (label, mutate) in <(String, String Function(String))>[
@@ -81,25 +77,21 @@ void main() {
     ('trailing export {}', (s) => '$s\nexport {compile, instantiate};\n'),
     ('a leading import', (s) => "import * as x from './y.mjs';\n$s"),
   ]) {
-    testWidgets(
-      'an unstripped "$label" is reported as itself',
-      (_) async {
-        final outcome = await _load(wasm, mutate(mjs));
+    testWidgets('an unstripped "$label" is reported as itself', (_) async {
+      final outcome = await _load(wasm, mutate(mjs));
 
-        expect(
-          outcome,
-          contains('module syntax this plugin does not strip'),
-          reason:
-              'the caller saw a raw JS SyntaxError and had to work out that '
-              'the plugin failed to strip its glue',
-        );
-        expect(
-          outcome,
-          contains('stripModuleSyntax'),
-          reason: 'the message must name what to change',
-        );
-      },
-      timeout: const Timeout(Duration(minutes: 5)),
-    );
+      expect(
+        outcome,
+        contains('module syntax this plugin does not strip'),
+        reason:
+            'the caller saw a raw JS SyntaxError and had to work out that '
+            'the plugin failed to strip its glue',
+      );
+      expect(
+        outcome,
+        contains('stripModuleSyntax'),
+        reason: 'the message must name what to change',
+      );
+    }, timeout: const Timeout(Duration(minutes: 5)));
   }
 }

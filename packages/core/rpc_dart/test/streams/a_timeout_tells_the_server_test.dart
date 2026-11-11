@@ -83,87 +83,75 @@ Future<void> _awaitCancel(int Function() cancels) async {
 }
 
 void main() {
-  test(
-    'a unary deadline tells the server',
-    () async {
-      final rig = await _rig();
+  test('a unary deadline tells the server', () async {
+    final rig = await _rig();
 
-      await expectLater(
-        rig.caller.unary<RpcString, RpcString>(
-          serviceName: 'Svc',
-          methodName: 'never',
-          request: 'a'.rpc,
-          requestCodec: _codec,
-          responseCodec: _codec,
-          context: RpcContext.empty().withTimeout(
-            const Duration(milliseconds: 300),
-          ),
+    await expectLater(
+      rig.caller.unary<RpcString, RpcString>(
+        serviceName: 'Svc',
+        methodName: 'never',
+        request: 'a'.rpc,
+        requestCodec: _codec,
+        responseCodec: _codec,
+        context: RpcContext.empty().withTimeout(
+          const Duration(milliseconds: 300),
         ),
-        throwsA(isA<RpcDeadlineExceededException>()),
-      );
-      await _awaitCancel(rig.cancels);
+      ),
+      throwsA(isA<RpcDeadlineExceededException>()),
+    );
+    await _awaitCancel(rig.cancels);
 
-      expect(
-        rig.cancels(),
-        1,
-        reason:
-            'the caller gave up without a word, so the handler runs on for a '
-            'caller that is already gone',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(
+      rig.cancels(),
+      1,
+      reason:
+          'the caller gave up without a word, so the handler runs on for a '
+          'caller that is already gone',
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
-  test(
-    'a client-stream deadline tells the server',
-    () async {
-      final rig = await _rig();
-      await expectLater(
-        rig.caller.clientStream<RpcString, RpcString>(
-          serviceName: 'Svc',
-          methodName: 'neverUp',
-          requests: Stream.value('a'.rpc),
-          requestCodec: _codec,
-          responseCodec: _codec,
-          context: RpcContext.empty().withTimeout(
-            const Duration(milliseconds: 300),
-          ),
+  test('a client-stream deadline tells the server', () async {
+    final rig = await _rig();
+    await expectLater(
+      rig.caller.clientStream<RpcString, RpcString>(
+        serviceName: 'Svc',
+        methodName: 'neverUp',
+        requests: Stream.value('a'.rpc),
+        requestCodec: _codec,
+        responseCodec: _codec,
+        context: RpcContext.empty().withTimeout(
+          const Duration(milliseconds: 300),
         ),
-        throwsA(isA<RpcStatusException>()),
-      );
-      await _awaitCancel(rig.cancels);
+      ),
+      throwsA(isA<RpcStatusException>()),
+    );
+    await _awaitCancel(rig.cancels);
 
-      expect(rig.cancels(), 1);
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    expect(rig.cancels(), 1);
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
   // GUARD: a call that ANSWERS must not send a cancellation notice. Without
   // this, "always notify" would pass both tests above and tell the server
   // every successful call had been abandoned.
-  test(
-    'GUARD a call that completes tells the server nothing',
-    () async {
-      final rig = await _rig();
+  test('GUARD a call that completes tells the server nothing', () async {
+    final rig = await _rig();
 
-      final reply = await rig.caller
-          .unary<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'echo',
-            request: 'hi'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          )
-          .timeout(const Duration(seconds: 5));
-      expect(reply.value, 'echo:hi');
+    final reply = await rig.caller
+        .unary<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'echo',
+          request: 'hi'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .timeout(const Duration(seconds: 5));
+    expect(reply.value, 'echo:hi');
 
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      expect(
-        rig.cancels(),
-        0,
-        reason: 'a successful call must not be reported as cancelled',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    expect(
+      rig.cancels(),
+      0,
+      reason: 'a successful call must not be reported as cancelled',
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
 }

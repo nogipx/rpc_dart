@@ -80,38 +80,30 @@ void main() {
     await server.stop();
   });
 
-  test(
-    'WITNESS response messages larger than the window arrive',
-    () async {
-      final got = await caller
-          .serverStream<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'feed',
-            requestCodec: _codec,
-            responseCodec: _codec,
-            request: ''.rpc,
-          )
-          .length
-          .timeout(const Duration(seconds: 30));
-      expect(got, 3);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('WITNESS response messages larger than the window arrive', () async {
+    final got = await caller
+        .serverStream<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'feed',
+          requestCodec: _codec,
+          responseCodec: _codec,
+          request: ''.rpc,
+        )
+        .length
+        .timeout(const Duration(seconds: 30));
+    expect(got, 3);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'WITNESS request messages larger than the window arrive',
-    () async {
-      final answer = await caller
-          .clientStream<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'upload',
-            requestCodec: _codec,
-            responseCodec: _codec,
-            requests: _uploads(),
-          )
-          .timeout(const Duration(seconds: 30));
-      expect(answer.value, '3');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('WITNESS request messages larger than the window arrive', () async {
+    final answer = await caller
+        .clientStream<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'upload',
+          requestCodec: _codec,
+          responseCodec: _codec,
+          requests: _uploads(),
+        )
+        .timeout(const Duration(seconds: 30));
+    expect(answer.value, '3');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

@@ -118,91 +118,75 @@ Future<_Run> _drive({
 
 void main() {
   group('the connection pool is repaid for bytes nobody consumed', () {
-    test(
-      'a bound view that is never read does not drain the pool',
-      () async {
-        // WITNESS for the debt ledger. Without it this stops at 1024 KiB --
-        // exactly the pool -- and never sends again.
-        final r = await _drive(
-          receiverReads: false,
-          calls: 12,
-          bytesPerCall: _streamWindow,
-        );
-        expect(
-          r.wedgedAtCall,
-          -1,
-          reason:
-              'sender wedged at call ${r.wedgedAtCall} after '
-              '${r.sentBytes ~/ 1024} KiB, against a '
-              '${_connWindow ~/ 1024} KiB pool: credit for the bytes the '
-              'receiver never took was never returned',
-        );
-        expect(r.sentBytes, 12 * _streamWindow);
-      },
-      timeout: const Timeout(Duration(seconds: 90)),
-    );
+    test('a bound view that is never read does not drain the pool', () async {
+      // WITNESS for the debt ledger. Without it this stops at 1024 KiB --
+      // exactly the pool -- and never sends again.
+      final r = await _drive(
+        receiverReads: false,
+        calls: 12,
+        bytesPerCall: _streamWindow,
+      );
+      expect(
+        r.wedgedAtCall,
+        -1,
+        reason:
+            'sender wedged at call ${r.wedgedAtCall} after '
+            '${r.sentBytes ~/ 1024} KiB, against a '
+            '${_connWindow ~/ 1024} KiB pool: credit for the bytes the '
+            'receiver never took was never returned',
+      );
+      expect(r.sentBytes, 12 * _streamWindow);
+    }, timeout: const Timeout(Duration(seconds: 90)));
 
-    test(
-      'a draining receiver is unaffected',
-      () async {
-        // GUARD, and the control for the witness above: the same rig with the
-        // suspected mechanism removed. If this ever wedges, the bench is wrong
-        // and the witness means nothing.
-        final r = await _drive(
-          receiverReads: true,
-          calls: 12,
-          bytesPerCall: _streamWindow,
-        );
-        expect(r.wedgedAtCall, -1);
-        expect(r.sentBytes, 12 * _streamWindow);
-      },
-      timeout: const Timeout(Duration(seconds: 90)),
-    );
+    test('a draining receiver is unaffected', () async {
+      // GUARD, and the control for the witness above: the same rig with the
+      // suspected mechanism removed. If this ever wedges, the bench is wrong
+      // and the witness means nothing.
+      final r = await _drive(
+        receiverReads: true,
+        calls: 12,
+        bytesPerCall: _streamWindow,
+      );
+      expect(r.wedgedAtCall, -1);
+      expect(r.sentBytes, 12 * _streamWindow);
+    }, timeout: const Timeout(Duration(seconds: 90)));
   });
 
   group('a pool configured without a per-stream window', () {
-    test(
-      'credits back as the receiver consumes, not at teardown',
-      () async {
-        // WITNESS for the second half: with flowControlWindowBytes null, every
-        // gate used to read it alone, so nothing metered while sends were still
-        // charged. ONE stream deliberately -- the debt ledger repays at teardown,
-        // so only a stream that does not end isolates the metering hole.
-        final r = await _drive(
-          receiverReads: true,
-          calls: 1,
-          bytesPerCall: 3 * _connWindow,
-          perStreamWindow: false,
-        );
-        expect(
-          r.wedgedAtCall,
-          -1,
-          reason:
-              'one stream, a receiver draining every message, wedged after '
-              '${r.sentBytes ~/ 1024} KiB against a ${_connWindow ~/ 1024} KiB '
-              'pool: the pool is charged but never credited when '
-              'flowControlWindowBytes is null',
-        );
-        expect(r.sentBytes, 3 * _connWindow);
-      },
-      timeout: const Timeout(Duration(seconds: 90)),
-    );
+    test('credits back as the receiver consumes, not at teardown', () async {
+      // WITNESS for the second half: with flowControlWindowBytes null, every
+      // gate used to read it alone, so nothing metered while sends were still
+      // charged. ONE stream deliberately -- the debt ledger repays at teardown,
+      // so only a stream that does not end isolates the metering hole.
+      final r = await _drive(
+        receiverReads: true,
+        calls: 1,
+        bytesPerCall: 3 * _connWindow,
+        perStreamWindow: false,
+      );
+      expect(
+        r.wedgedAtCall,
+        -1,
+        reason:
+            'one stream, a receiver draining every message, wedged after '
+            '${r.sentBytes ~/ 1024} KiB against a ${_connWindow ~/ 1024} KiB '
+            'pool: the pool is charged but never credited when '
+            'flowControlWindowBytes is null',
+      );
+      expect(r.sentBytes, 3 * _connWindow);
+    }, timeout: const Timeout(Duration(seconds: 90)));
 
-    test(
-      'the same stream with both windows on is unaffected',
-      () async {
-        // The paired "a valid configuration is not refused" case: the same
-        // volume, the same receiver, with the per-stream window restored.
-        final r = await _drive(
-          receiverReads: true,
-          calls: 1,
-          bytesPerCall: 3 * _connWindow,
-        );
-        expect(r.wedgedAtCall, -1);
-        expect(r.sentBytes, 3 * _connWindow);
-      },
-      timeout: const Timeout(Duration(seconds: 90)),
-    );
+    test('the same stream with both windows on is unaffected', () async {
+      // The paired "a valid configuration is not refused" case: the same
+      // volume, the same receiver, with the per-stream window restored.
+      final r = await _drive(
+        receiverReads: true,
+        calls: 1,
+        bytesPerCall: 3 * _connWindow,
+      );
+      expect(r.wedgedAtCall, -1);
+      expect(r.sentBytes, 3 * _connWindow);
+    }, timeout: const Timeout(Duration(seconds: 90)));
   });
 
   test('the debt ledger is exposed alongside its neighbours', () async {

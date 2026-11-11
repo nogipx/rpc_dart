@@ -34,67 +34,63 @@ const _codec = RpcCodec(RpcString.fromJson);
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets(
-    'a guest Timer is not throttled into uselessness',
-    (_) async {
-      final wasm = (await rootBundle.load(
-        'assets/guest.wasm',
-      )).buffer.asUint8List();
-      final mjs = await rootBundle.loadString('assets/guest.mjs');
-      final bridge = await RpcFlutterWasmBridge.load(
-        wasmBytes: wasm,
-        mjsCode: mjs,
-      ).timeout(const Duration(seconds: 60));
-      final caller = RpcCallerEndpoint(
-        transport: RpcWasmTransport.fromBridge(bridge: bridge, isClient: true),
+  testWidgets('a guest Timer is not throttled into uselessness', (_) async {
+    final wasm = (await rootBundle.load(
+      'assets/guest.wasm',
+    )).buffer.asUint8List();
+    final mjs = await rootBundle.loadString('assets/guest.mjs');
+    final bridge = await RpcFlutterWasmBridge.load(
+      wasmBytes: wasm,
+      mjsCode: mjs,
+    ).timeout(const Duration(seconds: 60));
+    final caller = RpcCallerEndpoint(
+      transport: RpcWasmTransport.fromBridge(bridge: bridge, isClient: true),
+    );
+
+    final rows = <String>[];
+    var worstMedianMs = 0;
+    for (final wanted in [1, 10, 100, 1000]) {
+      final r = await caller
+          .unary<RpcString, RpcString>(
+            serviceName: 'Echo',
+            methodName: 'TimerLag',
+            request: '$wanted'.rpc,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .timeout(const Duration(minutes: 2));
+      final parts = r.value.split(',').map(int.parse).toList();
+      String ms(int micros) => '${(micros / 1000).toStringAsFixed(1)}ms';
+      rows.add(
+        '   ${'Timer($wanted ms)'.padRight(18)}'
+        '${ms(parts[0]).padRight(10)}${ms(parts[1]).padRight(10)}'
+        '${ms(parts[2])}',
       );
+      final medianMs = (parts[1] / 1000).round();
+      if (medianMs > worstMedianMs) worstMedianMs = medianMs;
+    }
 
-      final rows = <String>[];
-      var worstMedianMs = 0;
-      for (final wanted in [1, 10, 100, 1000]) {
-        final r = await caller
-            .unary<RpcString, RpcString>(
-              serviceName: 'Echo',
-              methodName: 'TimerLag',
-              request: '$wanted'.rpc,
-              requestCodec: _codec,
-              responseCodec: _codec,
-            )
-            .timeout(const Duration(minutes: 2));
-        final parts = r.value.split(',').map(int.parse).toList();
-        String ms(int micros) => '${(micros / 1000).toStringAsFixed(1)}ms';
-        rows.add(
-          '   ${'Timer($wanted ms)'.padRight(18)}'
-          '${ms(parts[0]).padRight(10)}${ms(parts[1]).padRight(10)}'
-          '${ms(parts[2])}',
-        );
-        final medianMs = (parts[1] / 1000).round();
-        if (medianMs > worstMedianMs) worstMedianMs = medianMs;
-      }
+    // ignore: avoid_print
+    print(
+      'platform: ${Platform.operatingSystem}   (lag over the requested delay, '
+      'n=10 each)\n'
+      '   delay             min       median    max\n'
+      '${rows.join("\n")}',
+    );
 
-      // ignore: avoid_print
-      print(
-        'platform: ${Platform.operatingSystem}   (lag over the requested delay, '
-        'n=10 each)\n'
-        '   delay             min       median    max\n'
-        '${rows.join("\n")}',
-      );
+    // The bar is deliberately loose: this pins "usable", not "precise". A
+    // hidden-page throttle of the kind WebKit applies to background tabs
+    // clamps timers to 1000 ms or worse, which this would catch; ordinary
+    // scheduling jitter on a simulator would not.
+    expect(
+      worstMedianMs,
+      lessThan(500),
+      reason:
+          'a guest Timer is late by ${worstMedianMs}ms at the median, so '
+          'deadlines and backoff inside the guest cannot be trusted',
+    );
 
-      // The bar is deliberately loose: this pins "usable", not "precise". A
-      // hidden-page throttle of the kind WebKit applies to background tabs
-      // clamps timers to 1000 ms or worse, which this would catch; ordinary
-      // scheduling jitter on a simulator would not.
-      expect(
-        worstMedianMs,
-        lessThan(500),
-        reason:
-            'a guest Timer is late by ${worstMedianMs}ms at the median, so '
-            'deadlines and backoff inside the guest cannot be trusted',
-      );
-
-      await caller.close();
-      await bridge.close();
-    },
-    timeout: const Timeout(Duration(minutes: 10)),
-  );
+    await caller.close();
+    await bridge.close();
+  }, timeout: const Timeout(Duration(minutes: 10)));
 }

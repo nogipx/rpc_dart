@@ -137,16 +137,81 @@ void main() {
     if (!_run.gate.isCompleted) _run.gate.complete();
   });
 
-  test(
-    'the client does not buffer its request when the server stalls',
-    () async {
-      // The other half of the same stall: even once the SERVER is protected, the
-      // caller's `sendData` is fire-and-forget, so the client drained its whole
-      // request into package:http2's outgoing queue -- 156.3 MiB pulled while
-      // 4.4 MiB was on the wire, i.e. ~152 MiB held in client memory. Routing
-      // sends through RpcHttp2OutgoingPump makes the client park instead.
-      //
-      // Asserting on PULLED-vs-WIRE, since the gap between them IS the buffer.
+  test('the client does not buffer its request when the server stalls', () async {
+    // The other half of the same stall: even once the SERVER is protected, the
+    // caller's `sendData` is fire-and-forget, so the client drained its whole
+    // request into package:http2's outgoing queue -- 156.3 MiB pulled while
+    // 4.4 MiB was on the wire, i.e. ~152 MiB held in client memory. Routing
+    // sends through RpcHttp2OutgoingPump makes the client park instead.
+    //
+    // Asserting on PULLED-vs-WIRE, since the gap between them IS the buffer.
+    final run = _run = _Run();
+    final server = RpcHttp2Server(
+      host: '127.0.0.1',
+      port: 0,
+      mode: RpcResponderMode(
+        (e) => e.registerServiceContract(_Contract(run, 'deaf')),
+      ),
+    );
+    await server.start();
+    final relay = _Relay();
+    final port = await relay.start(server.port);
+    final transport = await RpcHttp2CallerTransport.connect(
+      host: '127.0.0.1',
+      port: port,
+    );
+    final caller = RpcCallerEndpoint(transport: transport);
+
+    final body = 'x' * _messageBytes;
+    var pulled = 0;
+    Stream<RpcString> requests() async* {
+      for (var i = 0; i < _target; i++) {
+        yield body.rpc;
+        pulled++;
+        if (i % 50 == 0) {
+          await Future<void>.delayed(const Duration(milliseconds: 1));
+        }
+      }
+    }
+
+    Future<RpcString> call(Stream<RpcString> requests) =>
+        caller.clientStream<RpcString, RpcString>(
+          requests: requests,
+          serviceName: 'Svc',
+          methodName: 'Upload',
+          requestCodec: _codec,
+          responseCodec: _codec,
+        );
+    unawaited(call(requests()).then((_) {}, onError: (Object _) {}));
+
+    // Settles on what is ASSERTED -- the bytes held in the client -- not on
+    // either counter alone. In the healthy case both climb in lockstep and
+    // their difference is flat, which is exactly the plateau. See
+    // settle_bytes.dart for why there is a floor under it.
+    await settleBytes(
+      () => pulled * _messageBytes - relay.bytes,
+      ceiling: _heldCeilingBytes,
+    );
+
+    final held = pulled * _messageBytes - relay.bytes;
+    expect(
+      held,
+      lessThan(_heldCeilingBytes),
+      reason:
+          'client pulled ${(pulled * _messageBytes / 1024 / 1024).toStringAsFixed(1)} MiB '
+          'but only ${(relay.bytes / 1024 / 1024).toStringAsFixed(1)} MiB '
+          'reached the wire: ${(held / 1024 / 1024).toStringAsFixed(1)} MiB is '
+          'sitting in the client',
+    );
+
+    run.gate.complete();
+    await transport.close().catchError((Object _) {});
+    await server.stop();
+    await relay.stop();
+  }, timeout: const Timeout(Duration(seconds: 120)));
+
+  for (final shape in const ['client', 'bidi']) {
+    test('$shape: an upload into a non-consuming handler is throttled', () async {
       final run = _run = _Run();
       final server = RpcHttp2Server(
         host: '127.0.0.1',
@@ -165,197 +230,120 @@ void main() {
       final caller = RpcCallerEndpoint(transport: transport);
 
       final body = 'x' * _messageBytes;
-      var pulled = 0;
       Stream<RpcString> requests() async* {
         for (var i = 0; i < _target; i++) {
           yield body.rpc;
-          pulled++;
+          // Paced, so window updates have time to matter. Pacing can only
+          // reduce what is offered, never cause a false pass.
           if (i % 50 == 0) {
             await Future<void>.delayed(const Duration(milliseconds: 1));
           }
         }
       }
 
-      Future<RpcString> call(Stream<RpcString> requests) =>
-          caller.clientStream<RpcString, RpcString>(
-            requests: requests,
-            serviceName: 'Svc',
-            methodName: 'Upload',
-            requestCodec: _codec,
-            responseCodec: _codec,
-          );
-      unawaited(call(requests()).then((_) {}, onError: (Object _) {}));
+      if (shape == 'bidi') {
+        caller
+            .bidirectionalStream<RpcString, RpcString>(
+              serviceName: 'Svc',
+              methodName: 'Chat',
+              requests: requests(),
+              requestCodec: _codec,
+              responseCodec: _codec,
+            )
+            .listen((_) {}, onError: (Object _) {});
+      } else {
+        Future<RpcString> call(Stream<RpcString> requests) =>
+            caller.clientStream<RpcString, RpcString>(
+              requests: requests,
+              serviceName: 'Svc',
+              methodName: 'Upload',
+              requestCodec: _codec,
+              responseCodec: _codec,
+            );
+        unawaited(call(requests()).then((_) {}, onError: (Object _) {}));
+      }
 
-      // Settles on what is ASSERTED -- the bytes held in the client -- not on
-      // either counter alone. In the healthy case both climb in lockstep and
-      // their difference is flat, which is exactly the plateau. See
-      // settle_bytes.dart for why there is a floor under it.
-      await settleBytes(
-        () => pulled * _messageBytes - relay.bytes,
-        ceiling: _heldCeilingBytes,
-      );
+      // Long enough that steady growth cannot be mistaken for a ceiling: the
+      // unfixed transport reached 13.8 MiB here and was still climbing. The
+      // budget is unchanged; it now ends early only on a settled plateau or
+      // on a breach of the very ceiling asserted below.
+      await settleBytes(() => relay.bytes, ceiling: _heldCeilingBytes);
 
-      final held = pulled * _messageBytes - relay.bytes;
+      expect(run.consumed, 0, reason: 'the handler was to consume nothing');
+      // Fixed: 4.4 MiB (client-stream) and 0.1 MiB (bidi). Unfixed at this
+      // point: 10.2 and 10.5 MiB, still climbing. 8 MiB sits clear of both.
       expect(
-        held,
+        relay.bytes,
         lessThan(_heldCeilingBytes),
         reason:
-            'client pulled ${(pulled * _messageBytes / 1024 / 1024).toStringAsFixed(1)} MiB '
-            'but only ${(relay.bytes / 1024 / 1024).toStringAsFixed(1)} MiB '
-            'reached the wire: ${(held / 1024 / 1024).toStringAsFixed(1)} MiB is '
-            'sitting in the client',
+            '${(relay.bytes / 1024 / 1024).toStringAsFixed(1)} MiB reached the '
+            'server for a handler consuming nothing',
       );
 
       run.gate.complete();
       await transport.close().catchError((Object _) {});
       await server.stop();
       await relay.stop();
-    },
-    timeout: const Timeout(Duration(seconds: 120)),
-  );
+    }, timeout: const Timeout(Duration(seconds: 120)));
 
-  for (final shape in const ['client', 'bidi']) {
-    test(
-      '$shape: an upload into a non-consuming handler is throttled',
-      () async {
-        final run = _run = _Run();
-        final server = RpcHttp2Server(
-          host: '127.0.0.1',
-          port: 0,
-          mode: RpcResponderMode(
-            (e) => e.registerServiceContract(_Contract(run, 'deaf')),
-          ),
-        );
-        await server.start();
-        final relay = _Relay();
-        final port = await relay.start(server.port);
-        final transport = await RpcHttp2CallerTransport.connect(
-          host: '127.0.0.1',
-          port: port,
-        );
-        final caller = RpcCallerEndpoint(transport: transport);
+    test('$shape: a consuming handler still receives its upload', () async {
+      // GUARD (passes both sides): throttling must not cost throughput.
+      final run = _run = _Run();
+      final server = RpcHttp2Server(
+        host: '127.0.0.1',
+        port: 0,
+        mode: RpcResponderMode(
+          (e) => e.registerServiceContract(_Contract(run, 'hungry')),
+        ),
+      );
+      await server.start();
+      final transport = await RpcHttp2CallerTransport.connect(
+        host: '127.0.0.1',
+        port: server.port,
+      );
+      final caller = RpcCallerEndpoint(transport: transport);
 
-        final body = 'x' * _messageBytes;
-        Stream<RpcString> requests() async* {
-          for (var i = 0; i < _target; i++) {
-            yield body.rpc;
-            // Paced, so window updates have time to matter. Pacing can only
-            // reduce what is offered, never cause a false pass.
-            if (i % 50 == 0) {
-              await Future<void>.delayed(const Duration(milliseconds: 1));
-            }
-          }
+      final body = 'x' * _messageBytes;
+      Stream<RpcString> requests() async* {
+        for (var i = 0; i < 500; i++) {
+          yield body.rpc;
         }
+      }
 
-        if (shape == 'bidi') {
-          caller
-              .bidirectionalStream<RpcString, RpcString>(
-                serviceName: 'Svc',
-                methodName: 'Chat',
-                requests: requests(),
-                requestCodec: _codec,
-                responseCodec: _codec,
-              )
-              .listen((_) {}, onError: (Object _) {});
-        } else {
-          Future<RpcString> call(Stream<RpcString> requests) =>
-              caller.clientStream<RpcString, RpcString>(
-                requests: requests,
-                serviceName: 'Svc',
-                methodName: 'Upload',
-                requestCodec: _codec,
-                responseCodec: _codec,
-              );
-          unawaited(call(requests()).then((_) {}, onError: (Object _) {}));
-        }
+      if (shape == 'bidi') {
+        caller
+            .bidirectionalStream<RpcString, RpcString>(
+              serviceName: 'Svc',
+              methodName: 'Chat',
+              requests: requests(),
+              requestCodec: _codec,
+              responseCodec: _codec,
+            )
+            .listen((_) {}, onError: (Object _) {});
+      } else {
+        Future<RpcString> call(Stream<RpcString> requests) =>
+            caller.clientStream<RpcString, RpcString>(
+              requests: requests,
+              serviceName: 'Svc',
+              methodName: 'Upload',
+              requestCodec: _codec,
+              responseCodec: _codec,
+            );
+        unawaited(call(requests()).then((_) {}, onError: (Object _) {}));
+      }
 
-        // Long enough that steady growth cannot be mistaken for a ceiling: the
-        // unfixed transport reached 13.8 MiB here and was still climbing. The
-        // budget is unchanged; it now ends early only on a settled plateau or
-        // on a breach of the very ceiling asserted below.
-        await settleBytes(() => relay.bytes, ceiling: _heldCeilingBytes);
+      final deadline = DateTime.now().add(const Duration(seconds: 60));
+      while (run.consumed < 500 && DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      expect(
+        run.consumed,
+        500,
+        reason: 'a consuming handler received only ${run.consumed} of 500',
+      );
 
-        expect(run.consumed, 0, reason: 'the handler was to consume nothing');
-        // Fixed: 4.4 MiB (client-stream) and 0.1 MiB (bidi). Unfixed at this
-        // point: 10.2 and 10.5 MiB, still climbing. 8 MiB sits clear of both.
-        expect(
-          relay.bytes,
-          lessThan(_heldCeilingBytes),
-          reason:
-              '${(relay.bytes / 1024 / 1024).toStringAsFixed(1)} MiB reached the '
-              'server for a handler consuming nothing',
-        );
-
-        run.gate.complete();
-        await transport.close().catchError((Object _) {});
-        await server.stop();
-        await relay.stop();
-      },
-      timeout: const Timeout(Duration(seconds: 120)),
-    );
-
-    test(
-      '$shape: a consuming handler still receives its upload',
-      () async {
-        // GUARD (passes both sides): throttling must not cost throughput.
-        final run = _run = _Run();
-        final server = RpcHttp2Server(
-          host: '127.0.0.1',
-          port: 0,
-          mode: RpcResponderMode(
-            (e) => e.registerServiceContract(_Contract(run, 'hungry')),
-          ),
-        );
-        await server.start();
-        final transport = await RpcHttp2CallerTransport.connect(
-          host: '127.0.0.1',
-          port: server.port,
-        );
-        final caller = RpcCallerEndpoint(transport: transport);
-
-        final body = 'x' * _messageBytes;
-        Stream<RpcString> requests() async* {
-          for (var i = 0; i < 500; i++) {
-            yield body.rpc;
-          }
-        }
-
-        if (shape == 'bidi') {
-          caller
-              .bidirectionalStream<RpcString, RpcString>(
-                serviceName: 'Svc',
-                methodName: 'Chat',
-                requests: requests(),
-                requestCodec: _codec,
-                responseCodec: _codec,
-              )
-              .listen((_) {}, onError: (Object _) {});
-        } else {
-          Future<RpcString> call(Stream<RpcString> requests) =>
-              caller.clientStream<RpcString, RpcString>(
-                requests: requests,
-                serviceName: 'Svc',
-                methodName: 'Upload',
-                requestCodec: _codec,
-                responseCodec: _codec,
-              );
-          unawaited(call(requests()).then((_) {}, onError: (Object _) {}));
-        }
-
-        final deadline = DateTime.now().add(const Duration(seconds: 60));
-        while (run.consumed < 500 && DateTime.now().isBefore(deadline)) {
-          await Future<void>.delayed(const Duration(milliseconds: 50));
-        }
-        expect(
-          run.consumed,
-          500,
-          reason: 'a consuming handler received only ${run.consumed} of 500',
-        );
-
-        await transport.close().catchError((Object _) {});
-        await server.stop();
-      },
-      timeout: const Timeout(Duration(seconds: 120)),
-    );
+      await transport.close().catchError((Object _) {});
+      await server.stop();
+    }, timeout: const Timeout(Duration(seconds: 120)));
   }
 }

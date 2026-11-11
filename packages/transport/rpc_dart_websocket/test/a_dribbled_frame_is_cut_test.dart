@@ -128,91 +128,77 @@ void main() {
     timeout: const Timeout(Duration(seconds: 30)),
   );
 
-  test(
-    'GUARD: idle BETWEEN frames is not cut',
-    () async {
-      final port = await _serve(
-        frameProgressTimeout: const Duration(milliseconds: 300),
-      );
+  test('GUARD: idle BETWEEN frames is not cut', () async {
+    final port = await _serve(
+      frameProgressTimeout: const Duration(milliseconds: 300),
+    );
 
-      final peer = await _Peer.upgrade(port);
-      // A complete frame, then silence for four times the deadline. The
-      // deadline may only arm mid-frame; between frames a peer may idle.
-      peer.socket.add(_pingFrame());
+    final peer = await _Peer.upgrade(port);
+    // A complete frame, then silence for four times the deadline. The
+    // deadline may only arm mid-frame; between frames a peer may idle.
+    peer.socket.add(_pingFrame());
+    await peer.socket.flush();
+
+    expect(
+      await peer.closedWithin(const Duration(seconds: 2)),
+      isFalse,
+      reason:
+          'a complete frame followed by silence must not be cut — the '
+          'deadline is on progress within a frame, not on quiet',
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
+
+  test('GUARD: a disabled timeout leaves the drip unlimited', () async {
+    final port = await _serve(frameProgressTimeout: null);
+
+    final peer = await _Peer.upgrade(port);
+    peer.socket.add(const [0x81, 0x83]);
+    await peer.socket.flush();
+
+    expect(
+      await peer.closedWithin(const Duration(seconds: 2)),
+      isFalse,
+      reason:
+          'null is the documented opt-out: without the deadline the old '
+          'behaviour (pingInterval alone) applies',
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
+
+  test('GUARD: a steadily arriving frame is never cut', () async {
+    final port = await _serve(frameProgressTimeout: const Duration(seconds: 1));
+
+    final peer = await _Peer.upgrade(port);
+    // A 4 KiB binary message delivered in 64-byte chunks, 100ms apart:
+    // ~6.5s total, every chunk well inside the 1s deadline.
+    final message = Uint8List.fromList([
+      0x82,
+      0xFE, // masked + 16-bit extended length
+      16,
+      0, // 4096-byte payload
+      1,
+      2,
+      3,
+      4,
+      ...List<int>.filled(4096, 65),
+    ]);
+    // Mask it the way the guard expects.
+    final mask = message.sublist(4, 8);
+    for (var i = 8; i < message.length; i++) {
+      message[i] ^= mask[(i - 8) % 4];
+    }
+    for (var off = 0; off < message.length; off += 64) {
+      final end = off + 64 > message.length ? message.length : off + 64;
+      peer.socket.add(message.sublist(off, end));
       await peer.socket.flush();
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
 
-      expect(
-        await peer.closedWithin(const Duration(seconds: 2)),
-        isFalse,
-        reason:
-            'a complete frame followed by silence must not be cut — the '
-            'deadline is on progress within a frame, not on quiet',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
-
-  test(
-    'GUARD: a disabled timeout leaves the drip unlimited',
-    () async {
-      final port = await _serve(frameProgressTimeout: null);
-
-      final peer = await _Peer.upgrade(port);
-      peer.socket.add(const [0x81, 0x83]);
-      await peer.socket.flush();
-
-      expect(
-        await peer.closedWithin(const Duration(seconds: 2)),
-        isFalse,
-        reason:
-            'null is the documented opt-out: without the deadline the old '
-            'behaviour (pingInterval alone) applies',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 30)),
-  );
-
-  test(
-    'GUARD: a steadily arriving frame is never cut',
-    () async {
-      final port = await _serve(
-        frameProgressTimeout: const Duration(seconds: 1),
-      );
-
-      final peer = await _Peer.upgrade(port);
-      // A 4 KiB binary message delivered in 64-byte chunks, 100ms apart:
-      // ~6.5s total, every chunk well inside the 1s deadline.
-      final message = Uint8List.fromList([
-        0x82,
-        0xFE, // masked + 16-bit extended length
-        16,
-        0, // 4096-byte payload
-        1,
-        2,
-        3,
-        4,
-        ...List<int>.filled(4096, 65),
-      ]);
-      // Mask it the way the guard expects.
-      final mask = message.sublist(4, 8);
-      for (var i = 8; i < message.length; i++) {
-        message[i] ^= mask[(i - 8) % 4];
-      }
-      for (var off = 0; off < message.length; off += 64) {
-        final end = off + 64 > message.length ? message.length : off + 64;
-        peer.socket.add(message.sublist(off, end));
-        await peer.socket.flush();
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-      }
-
-      expect(
-        await peer.closedWithin(const Duration(seconds: 2)),
-        isFalse,
-        reason:
-            'progress within the window must rearm the deadline, so an '
-            'honest slow upload survives',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      await peer.closedWithin(const Duration(seconds: 2)),
+      isFalse,
+      reason:
+          'progress within the window must rearm the deadline, so an '
+          'honest slow upload survives',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

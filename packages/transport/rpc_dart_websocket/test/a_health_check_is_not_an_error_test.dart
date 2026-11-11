@@ -122,17 +122,13 @@ void main() {
 
   // CONTROL: real handshakes must stay silent too — otherwise "0 errors" is
   // satisfied by a logger that counts nothing.
-  test(
-    'CONTROL: real handshakes report nothing either',
-    () async {
-      final run = await _probeServer(upgrade: true);
+  test('CONTROL: real handshakes report nothing either', () async {
+    final run = await _probeServer(upgrade: true);
 
-      expect(run.errorRecords, 0);
-      expect(run.onConnectionError, 0);
-      expect(run.peerSaw, 'upgraded');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(run.errorRecords, 0);
+    expect(run.onConnectionError, 0);
+    expect(run.peerSaw, 'upgraded');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   // GUARD: the origin gate still gates. The permitted set is now lower-cased once
   // up front rather than per handshake, and this is what says the two forms agree

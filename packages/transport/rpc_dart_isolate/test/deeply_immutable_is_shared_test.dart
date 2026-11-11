@@ -126,24 +126,20 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
-  test(
-    'CONTROL: the same class without the pragma is copied',
-    () async {
-      // Without this the test above proves nothing: everything would look
-      // "shared" if identity happened to survive for some other reason.
-      final tick = PlainTick(_runtimeString('AAPL'), 19999);
-      final seen = await caller
-          .unary<PlainTick, Seen>(
-            serviceName: _service,
-            methodName: 'PlainTick',
-            request: tick,
-          )
-          .timeout(const Duration(seconds: 30));
+  test('CONTROL: the same class without the pragma is copied', () async {
+    // Without this the test above proves nothing: everything would look
+    // "shared" if identity happened to survive for some other reason.
+    final tick = PlainTick(_runtimeString('AAPL'), 19999);
+    final seen = await caller
+        .unary<PlainTick, Seen>(
+          serviceName: _service,
+          methodName: 'PlainTick',
+          request: tick,
+        )
+        .timeout(const Duration(seconds: 30));
 
-      expect(seen.identity, isNot(identityHashCode(tick)));
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(seen.identity, isNot(identityHashCode(tick)));
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   test(
     'an annotated field stays shared inside a message that is copied',

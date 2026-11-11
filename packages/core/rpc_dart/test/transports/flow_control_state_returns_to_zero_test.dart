@@ -119,52 +119,40 @@ Future<Map<String, int>> _drive({required bool drains}) async {
 }
 
 void main() {
-  test(
-    'an abandoned upload leaves no per-stream credit behind',
-    () async {
-      // WITNESS. Without the liveness gate on a late grant this is $_calls.
-      final sizes = await _drive(drains: false);
+  test('an abandoned upload leaves no per-stream credit behind', () async {
+    // WITNESS. Without the liveness gate on a late grant this is $_calls.
+    final sizes = await _drive(drains: false);
+    expect(
+      sizes['sendCredit'],
+      0,
+      reason:
+          '$_calls abandoned uploads left ${sizes['sendCredit']} send-credit '
+          'entries for streams that have ended; the map is capped, so the cost '
+          'is that the initial send window stops seeding new streams once it '
+          'fills',
+    );
+    expect(sizes['waiters'], 0);
+  }, timeout: const Timeout(Duration(seconds: 120)));
+
+  test('GUARD: a drained upload was already clean', () async {
+    // The control, and the paired "a valid case is not broken": these calls
+    // never park, so they never took the late-grant path at all. If this ever
+    // goes non-zero the mechanism is a different one.
+    final sizes = await _drive(drains: true);
+    expect(sizes['sendCredit'], 0);
+    expect(sizes['waiters'], 0);
+  }, timeout: const Timeout(Duration(seconds: 120)));
+
+  test('GUARD: every counter returns to zero, not just this one', () async {
+    // The whole map, so a fix that trades one leaking counter for another is
+    // caught here rather than in a later round.
+    final sizes = await _drive(drains: false);
+    for (final entry in sizes.entries) {
       expect(
-        sizes['sendCredit'],
+        entry.value,
         0,
-        reason:
-            '$_calls abandoned uploads left ${sizes['sendCredit']} send-credit '
-            'entries for streams that have ended; the map is capped, so the cost '
-            'is that the initial send window stops seeding new streams once it '
-            'fills',
+        reason: '${entry.key} was left at ${entry.value} after $_calls calls',
       );
-      expect(sizes['waiters'], 0);
-    },
-    timeout: const Timeout(Duration(seconds: 120)),
-  );
-
-  test(
-    'GUARD: a drained upload was already clean',
-    () async {
-      // The control, and the paired "a valid case is not broken": these calls
-      // never park, so they never took the late-grant path at all. If this ever
-      // goes non-zero the mechanism is a different one.
-      final sizes = await _drive(drains: true);
-      expect(sizes['sendCredit'], 0);
-      expect(sizes['waiters'], 0);
-    },
-    timeout: const Timeout(Duration(seconds: 120)),
-  );
-
-  test(
-    'GUARD: every counter returns to zero, not just this one',
-    () async {
-      // The whole map, so a fix that trades one leaking counter for another is
-      // caught here rather than in a later round.
-      final sizes = await _drive(drains: false);
-      for (final entry in sizes.entries) {
-        expect(
-          entry.value,
-          0,
-          reason: '${entry.key} was left at ${entry.value} after $_calls calls',
-        );
-      }
-    },
-    timeout: const Timeout(Duration(seconds: 120)),
-  );
+    }
+  }, timeout: const Timeout(Duration(seconds: 120)));
 }

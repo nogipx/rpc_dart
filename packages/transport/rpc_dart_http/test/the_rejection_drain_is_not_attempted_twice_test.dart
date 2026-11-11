@@ -118,25 +118,18 @@ void main() {
   // instead of a status, and deliberately so: the drain is deadlined, which is what
   // `a_refused_request_has_a_deadline_too_test` pins. Asserting a status there
   // would be asking for the thing that deadline gives up.
-  test(
-    'CONTROL: a pre-read rejection still answers its status',
-    () async {
-      final run = await _slowBody(
-        contentType: 'text/plain',
-        completeBody: true,
-      );
+  test('CONTROL: a pre-read rejection still answers its status', () async {
+    final run = await _slowBody(contentType: 'text/plain', completeBody: true);
 
-      expect(
-        run.peerSaw,
-        contains('415'),
-        reason:
-            'the drain before a pre-read rejection is what lets the status reach '
-            'the peer at all',
-      );
-      expect(run.warnings, 0);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      run.peerSaw,
+      contains('415'),
+      reason:
+          'the drain before a pre-read rejection is what lets the status reach '
+          'the peer at all',
+    );
+    expect(run.warnings, 0);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   test(
     'WITNESS: close() answers a pending request without draining it again',

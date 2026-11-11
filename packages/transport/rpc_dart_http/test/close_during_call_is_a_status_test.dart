@@ -77,50 +77,46 @@ Future<RpcHttpServer> _startServer() async {
 }
 
 void main() {
-  test(
-    'a call in flight when close() lands gets a gRPC status',
-    () async {
-      final server = await _startServer();
-      addTearDown(() => server.stop());
+  test('a call in flight when close() lands gets a gRPC status', () async {
+    final server = await _startServer();
+    addTearDown(() => server.stop());
 
-      final transport = RpcHttpCallerTransport(
-        baseUrl: 'http://127.0.0.1:${server.actualPort}',
-      );
-      final caller = RpcCallerEndpoint(transport: transport);
+    final transport = RpcHttpCallerTransport(
+      baseUrl: 'http://127.0.0.1:${server.actualPort}',
+    );
+    final caller = RpcCallerEndpoint(transport: transport);
 
-      Object? caught;
-      final call = caller
-          .unary<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'Slow',
-            request: 'x'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          )
-          .catchError((Object e) {
-            caught = e;
-            return 'x'.rpc;
-          });
+    Object? caught;
+    final call = caller
+        .unary<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'Slow',
+          request: 'x'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .catchError((Object e) {
+          caught = e;
+          return 'x'.rpc;
+        });
 
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      await transport.close();
-      await call.timeout(const Duration(seconds: 15));
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    await transport.close();
+    await call.timeout(const Duration(seconds: 15));
 
-      expect(
-        caught,
-        isA<RpcStatusException>(),
-        reason:
-            'a bare StateError is unclassifiable, and the awaiting code is '
-            'usually not the code that called close()',
-      );
-      expect(
-        (caught! as RpcStatusException).statusCode,
-        RpcStatus.unavailable,
-        reason: 'matches what websocket, isolate and http2 all report',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      caught,
+      isA<RpcStatusException>(),
+      reason:
+          'a bare StateError is unclassifiable, and the awaiting code is '
+          'usually not the code that called close()',
+    );
+    expect(
+      (caught! as RpcStatusException).statusCode,
+      RpcStatus.unavailable,
+      reason: 'matches what websocket, isolate and http2 all report',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   test(
     'GUARD: a call made AFTER close is refused, and not retryably',
@@ -144,29 +140,25 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
-  test(
-    'GUARD: an ordinary call is unaffected',
-    () async {
-      final server = await _startServer();
-      addTearDown(() => server.stop());
+  test('GUARD: an ordinary call is unaffected', () async {
+    final server = await _startServer();
+    addTearDown(() => server.stop());
 
-      final transport = RpcHttpCallerTransport(
-        baseUrl: 'http://127.0.0.1:${server.actualPort}',
-      );
-      addTearDown(() => transport.close());
-      final caller = RpcCallerEndpoint(transport: transport);
+    final transport = RpcHttpCallerTransport(
+      baseUrl: 'http://127.0.0.1:${server.actualPort}',
+    );
+    addTearDown(() => transport.close());
+    final caller = RpcCallerEndpoint(transport: transport);
 
-      final r = await caller
-          .unary<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'Quick',
-            request: 'x'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          )
-          .timeout(const Duration(seconds: 10));
-      expect(r.value, 'quick-ok');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    final r = await caller
+        .unary<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'Quick',
+          request: 'x'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .timeout(const Duration(seconds: 10));
+    expect(r.value, 'quick-ok');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

@@ -76,143 +76,131 @@ Future<bool> grind(http2.ClientTransportConnection conn, int count) async {
 }
 
 void main() {
-  test(
-    'a grinding peer loses the connection at the default policy',
-    () async {
-      // No closeOnProtocolError: the DEFAULT, which is the configuration this
-      // has to hold under.
-      final server = RpcHttp2Server(
-        host: '127.0.0.1',
-        port: 0,
-        mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
-      );
-      await server.start();
-      addTearDown(server.stop);
+  test('a grinding peer loses the connection at the default policy', () async {
+    // No closeOnProtocolError: the DEFAULT, which is the configuration this
+    // has to hold under.
+    final server = RpcHttp2Server(
+      host: '127.0.0.1',
+      port: 0,
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
+    );
+    await server.start();
+    addTearDown(server.stop);
 
-      final socket = await Socket.connect('127.0.0.1', server.port);
-      final conn = http2.ClientTransportConnection.viaSocket(socket);
-      addTearDown(() async {
+    final socket = await Socket.connect('127.0.0.1', server.port);
+    final conn = http2.ClientTransportConnection.viaSocket(socket);
+    addTearDown(() async {
+      try {
+        await conn.terminate();
+      } catch (_) {}
+    });
+
+    expect(
+      await grind(conn, _pastTheBackstop),
+      isFalse,
+      reason:
+          'the peer sent $_pastTheBackstop policy violations and kept its '
+          'connection — nothing bounds what it can repeat',
+    );
+  }, timeout: const Timeout(Duration(seconds: 120)));
+
+  test('GUARD: a few violations do not cost the connection', () async {
+    // The backstop must not turn into closeOnProtocolError by the back door. A
+    // misconfigured peer sending a handful of bad frames has to keep working,
+    // which is the whole reason the field defaults to false.
+    final server = RpcHttp2Server(
+      host: '127.0.0.1',
+      port: 0,
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
+    );
+    await server.start();
+    addTearDown(server.stop);
+
+    final socket = await Socket.connect('127.0.0.1', server.port);
+    final conn = http2.ClientTransportConnection.viaSocket(socket);
+    addTearDown(() async {
+      try {
+        await conn.terminate();
+      } catch (_) {}
+    });
+
+    expect(await grind(conn, 20), isTrue, reason: '20 is not hostile');
+
+    // And it is still a working connection, not merely an open socket.
+    final t = await RpcHttp2CallerTransport.connect(
+      host: '127.0.0.1',
+      port: server.port,
+    );
+    addTearDown(t.close);
+    final caller = RpcCallerEndpoint(transport: t);
+    addTearDown(caller.close);
+
+    final reply = await caller
+        .unary<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'Echo',
+          request: 'x'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .timeout(const Duration(seconds: 10));
+    expect(reply.value, 'x');
+  }, timeout: const Timeout(Duration(seconds: 120)));
+
+  test('a grinding SERVER loses the client transport too', () async {
+    // The caller half got its own counter and needs its own witness. A hostile
+    // server answers every request with a header block the client's policy
+    // refuses; the client must stop talking to it.
+    final listener = await ServerSocket.bind('127.0.0.1', 0);
+    addTearDown(listener.close);
+
+    listener.listen((socket) {
+      final conn = http2.ServerTransportConnection.viaSocket(socket);
+      conn.incomingStreams.listen((stream) {
+        stream.incomingMessages.listen((_) {}, onError: (Object _) {});
         try {
-          await conn.terminate();
+          stream.sendHeaders([
+            http2.Header.ascii(':status', '200'),
+            http2.Header.ascii('content-type', 'application/grpc+proto'),
+            // 200 response headers against the client's maxHeaders of 128.
+            for (var h = 0; h < 200; h++) http2.Header.ascii('y-h$h', 'v'),
+          ], endStream: true);
         } catch (_) {}
-      });
-
-      expect(
-        await grind(conn, _pastTheBackstop),
-        isFalse,
-        reason:
-            'the peer sent $_pastTheBackstop policy violations and kept its '
-            'connection — nothing bounds what it can repeat',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 120)),
-  );
-
-  test(
-    'GUARD: a few violations do not cost the connection',
-    () async {
-      // The backstop must not turn into closeOnProtocolError by the back door. A
-      // misconfigured peer sending a handful of bad frames has to keep working,
-      // which is the whole reason the field defaults to false.
-      final server = RpcHttp2Server(
-        host: '127.0.0.1',
-        port: 0,
-        mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
-      );
-      await server.start();
-      addTearDown(server.stop);
-
-      final socket = await Socket.connect('127.0.0.1', server.port);
-      final conn = http2.ClientTransportConnection.viaSocket(socket);
-      addTearDown(() async {
-        try {
-          await conn.terminate();
-        } catch (_) {}
-      });
-
-      expect(await grind(conn, 20), isTrue, reason: '20 is not hostile');
-
-      // And it is still a working connection, not merely an open socket.
-      final t = await RpcHttp2CallerTransport.connect(
-        host: '127.0.0.1',
-        port: server.port,
-      );
-      addTearDown(t.close);
-      final caller = RpcCallerEndpoint(transport: t);
-      addTearDown(caller.close);
-
-      final reply = await caller
-          .unary<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'Echo',
-            request: 'x'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          )
-          .timeout(const Duration(seconds: 10));
-      expect(reply.value, 'x');
-    },
-    timeout: const Timeout(Duration(seconds: 120)),
-  );
-
-  test(
-    'a grinding SERVER loses the client transport too',
-    () async {
-      // The caller half got its own counter and needs its own witness. A hostile
-      // server answers every request with a header block the client's policy
-      // refuses; the client must stop talking to it.
-      final listener = await ServerSocket.bind('127.0.0.1', 0);
-      addTearDown(listener.close);
-
-      listener.listen((socket) {
-        final conn = http2.ServerTransportConnection.viaSocket(socket);
-        conn.incomingStreams.listen((stream) {
-          stream.incomingMessages.listen((_) {}, onError: (Object _) {});
-          try {
-            stream.sendHeaders([
-              http2.Header.ascii(':status', '200'),
-              http2.Header.ascii('content-type', 'application/grpc+proto'),
-              // 200 response headers against the client's maxHeaders of 128.
-              for (var h = 0; h < 200; h++) http2.Header.ascii('y-h$h', 'v'),
-            ], endStream: true);
-          } catch (_) {}
-        }, onError: (Object _) {});
       }, onError: (Object _) {});
+    }, onError: (Object _) {});
 
-      final t = await RpcHttp2CallerTransport.connect(
-        host: '127.0.0.1',
-        port: listener.port,
-      );
-      addTearDown(() async {
-        try {
-          await t.close();
-        } catch (_) {}
-      });
+    final t = await RpcHttp2CallerTransport.connect(
+      host: '127.0.0.1',
+      port: listener.port,
+    );
+    addTearDown(() async {
+      try {
+        await t.close();
+      } catch (_) {}
+    });
 
-      for (var i = 0; i < _pastTheBackstop; i++) {
-        if (t.isClosed) break;
-        try {
-          final id = t.createStream();
-          await t.sendMetadata(
-            id,
-            RpcMetadata.forClientRequest('Svc', 'Echo'),
-            endStream: true,
-          );
-        } catch (_) {
-          break;
-        }
-        if (i % 50 == 0) await Future<void>.delayed(Duration.zero);
+    for (var i = 0; i < _pastTheBackstop; i++) {
+      if (t.isClosed) break;
+      try {
+        final id = t.createStream();
+        await t.sendMetadata(
+          id,
+          RpcMetadata.forClientRequest('Svc', 'Echo'),
+          endStream: true,
+        );
+      } catch (_) {
+        break;
       }
-      await Future<void>.delayed(const Duration(seconds: 1));
+      if (i % 50 == 0) await Future<void>.delayed(Duration.zero);
+    }
+    await Future<void>.delayed(const Duration(seconds: 1));
 
-      expect(
-        t.isClosed,
-        isTrue,
-        reason:
-            'the server answered $_pastTheBackstop calls with metadata the '
-            'client refuses, and the client kept the connection',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 120)),
-  );
+    expect(
+      t.isClosed,
+      isTrue,
+      reason:
+          'the server answered $_pastTheBackstop calls with metadata the '
+          'client refuses, and the client kept the connection',
+    );
+  }, timeout: const Timeout(Duration(seconds: 120)));
 }

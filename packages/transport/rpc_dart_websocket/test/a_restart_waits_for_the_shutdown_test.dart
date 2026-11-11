@@ -163,15 +163,11 @@ void main() {
   // hold the connection — without them "held and unclosed" is satisfied by a rig
   // that never delivered a connection at all.
   for (final window in ['after', 'none']) {
-    test(
-      'CONTROL: window=$window holds the fresh connection',
-      () async {
-        final run = await _restart(window);
-        expect(run.freshOutcome, 'never');
-        expect(run.endpointsHeld, 1);
-      },
-      timeout: const Timeout(Duration(seconds: 60)),
-    );
+    test('CONTROL: window=$window holds the fresh connection', () async {
+      final run = await _restart(window);
+      expect(run.freshOutcome, 'never');
+      expect(run.endpointsHeld, 1);
+    }, timeout: const Timeout(Duration(seconds: 60)));
   }
 
   // GUARD: a peer arriving while a shutdown really IS in flight, with no restart

@@ -146,160 +146,143 @@ Future<String> _ping(_Rig rig) async {
 
 void main() {
   group('a stalled upload does not take the connection with it', () {
-    test(
-      'the connection still serves other calls during the stall',
-      () async {
-        // WITNESS. With the pause, this was HUNG: the stalled call had parked the
-        // whole connection window.
-        final rig = await _connect();
-        expect(await _ping(rig), 'pong', reason: 'baseline');
+    test('the connection still serves other calls during the stall', () async {
+      // WITNESS. With the pause, this was HUNG: the stalled call had parked the
+      // whole connection window.
+      final rig = await _connect();
+      expect(await _ping(rig), 'pong', reason: 'baseline');
 
-        final body = 'x' * _messageBytes;
-        Stream<RpcString> requests() async* {
-          for (var i = 0; i < 40000; i++) {
-            yield body.rpc;
-            if (i % 50 == 0) {
-              await Future<void>.delayed(const Duration(milliseconds: 1));
-            }
+      final body = 'x' * _messageBytes;
+      Stream<RpcString> requests() async* {
+        for (var i = 0; i < 40000; i++) {
+          yield body.rpc;
+          if (i % 50 == 0) {
+            await Future<void>.delayed(const Duration(milliseconds: 1));
           }
         }
+      }
 
-        final sub = rig.caller
-            .bidirectionalStream<RpcString, RpcString>(
-              serviceName: 'Svc',
-              methodName: 'Chat',
-              requests: requests(),
-              requestCodec: _codec,
-              responseCodec: _codec,
-            )
-            .listen((_) {}, onError: (Object _) {});
-        await Future<void>.delayed(const Duration(milliseconds: 800));
+      final sub = rig.caller
+          .bidirectionalStream<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: 'Chat',
+            requests: requests(),
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .listen((_) {}, onError: (Object _) {});
+      await Future<void>.delayed(const Duration(milliseconds: 800));
 
-        expect(
-          await _ping(rig),
-          'pong',
-          reason:
-              'a call stalled on a deaf handler blocked the whole connection',
-        );
+      expect(
+        await _ping(rig),
+        'pong',
+        reason: 'a call stalled on a deaf handler blocked the whole connection',
+      );
 
-        await sub.cancel();
-        await _teardown(rig);
-      },
-      timeout: const Timeout(Duration(seconds: 90)),
-    );
+      await sub.cancel();
+      await _teardown(rig);
+    }, timeout: const Timeout(Duration(seconds: 90)));
 
-    test(
-      'and still serves them after the stalled call is cancelled',
-      () async {
-        // WITNESS. With the pause this stayed HUNG for good -- the pool was
-        // discarded uncredited by the reset, so nothing ever came back.
-        final rig = await _connect();
-        expect(await _ping(rig), 'pong', reason: 'baseline');
+    test('and still serves them after the stalled call is cancelled', () async {
+      // WITNESS. With the pause this stayed HUNG for good -- the pool was
+      // discarded uncredited by the reset, so nothing ever came back.
+      final rig = await _connect();
+      expect(await _ping(rig), 'pong', reason: 'baseline');
 
-        final body = 'x' * _messageBytes;
-        Stream<RpcString> requests() async* {
-          for (var i = 0; i < 40000; i++) {
-            yield body.rpc;
-            if (i % 50 == 0) {
-              await Future<void>.delayed(const Duration(milliseconds: 1));
-            }
+      final body = 'x' * _messageBytes;
+      Stream<RpcString> requests() async* {
+        for (var i = 0; i < 40000; i++) {
+          yield body.rpc;
+          if (i % 50 == 0) {
+            await Future<void>.delayed(const Duration(milliseconds: 1));
           }
         }
+      }
 
-        final sub = rig.caller
-            .bidirectionalStream<RpcString, RpcString>(
-              serviceName: 'Svc',
-              methodName: 'Chat',
-              requests: requests(),
-              requestCodec: _codec,
-              responseCodec: _codec,
-            )
-            .listen((_) {}, onError: (Object _) {});
-        await Future<void>.delayed(const Duration(milliseconds: 800));
-        await sub.cancel();
-        await Future<void>.delayed(const Duration(milliseconds: 200));
+      final sub = rig.caller
+          .bidirectionalStream<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: 'Chat',
+            requests: requests(),
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .listen((_) {}, onError: (Object _) {});
+      await Future<void>.delayed(const Duration(milliseconds: 800));
+      await sub.cancel();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
 
-        expect(
-          await _ping(rig),
-          'pong',
-          reason:
-              'cancelling one stalled upload left the connection unusable for '
-              'every later call',
-        );
+      expect(
+        await _ping(rig),
+        'pong',
+        reason:
+            'cancelling one stalled upload left the connection unusable for '
+            'every later call',
+      );
 
-        await _teardown(rig);
-      },
-      timeout: const Timeout(Duration(seconds: 90)),
-    );
+      await _teardown(rig);
+    }, timeout: const Timeout(Duration(seconds: 90)));
   });
 
   group('a paused download does not take the connection with it', () {
-    test(
-      'the connection survives a paused-then-cancelled download',
-      () async {
-        // WITNESS for the mirror direction: the same code hop lives in the caller
-        // transport, and it failed the same way -- here it is the client's own
-        // inbound pool, so the server cannot send the ping's response.
-        final rig = await _connect();
-        expect(await _ping(rig), 'pong', reason: 'baseline');
+    test('the connection survives a paused-then-cancelled download', () async {
+      // WITNESS for the mirror direction: the same code hop lives in the caller
+      // transport, and it failed the same way -- here it is the client's own
+      // inbound pool, so the server cannot send the ping's response.
+      final rig = await _connect();
+      expect(await _ping(rig), 'pong', reason: 'baseline');
 
-        final sub = rig.caller
-            .serverStream<RpcString, RpcString>(
-              serviceName: 'Svc',
-              methodName: 'Firehose',
-              request: 'go'.rpc,
-              requestCodec: _codec,
-              responseCodec: _codec,
-            )
-            .listen((_) {}, onError: (Object _) {});
-        await Future<void>.delayed(const Duration(milliseconds: 300));
-        sub.pause();
-        await Future<void>.delayed(const Duration(milliseconds: 800));
+      final sub = rig.caller
+          .serverStream<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: 'Firehose',
+            request: 'go'.rpc,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .listen((_) {}, onError: (Object _) {});
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      sub.pause();
+      await Future<void>.delayed(const Duration(milliseconds: 800));
 
-        expect(
-          await _ping(rig),
-          'pong',
-          reason: 'a paused download blocked the whole connection',
-        );
+      expect(
+        await _ping(rig),
+        'pong',
+        reason: 'a paused download blocked the whole connection',
+      );
 
-        await sub.cancel();
-        await Future<void>.delayed(const Duration(milliseconds: 200));
+      await sub.cancel();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
 
-        expect(
-          await _ping(rig),
-          'pong',
-          reason:
-              'cancelling one paused download left the connection unusable for '
-              'every later call',
-        );
+      expect(
+        await _ping(rig),
+        'pong',
+        reason:
+            'cancelling one paused download left the connection unusable for '
+            'every later call',
+      );
 
-        await _teardown(rig);
-      },
-      timeout: const Timeout(Duration(seconds: 90)),
-    );
+      await _teardown(rig);
+    }, timeout: const Timeout(Duration(seconds: 90)));
 
-    test(
-      'GUARD: an ordinary drained call is unaffected',
-      () async {
-        // The paired "a valid case is not refused": nothing about failing a
-        // stalled call may touch a call that reads what it asked for.
-        final rig = await _connect();
-        final got = await rig.caller
-            .serverStream<RpcString, RpcString>(
-              serviceName: 'Svc',
-              methodName: 'Firehose',
-              request: 'go'.rpc,
-              requestCodec: _codec,
-              responseCodec: _codec,
-            )
-            .take(200)
-            .toList()
-            .timeout(const Duration(seconds: 30));
-        expect(got, hasLength(200));
-        expect(await _ping(rig), 'pong');
-        await _teardown(rig);
-      },
-      timeout: const Timeout(Duration(seconds: 90)),
-    );
+    test('GUARD: an ordinary drained call is unaffected', () async {
+      // The paired "a valid case is not refused": nothing about failing a
+      // stalled call may touch a call that reads what it asked for.
+      final rig = await _connect();
+      final got = await rig.caller
+          .serverStream<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: 'Firehose',
+            request: 'go'.rpc,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .take(200)
+          .toList()
+          .timeout(const Duration(seconds: 30));
+      expect(got, hasLength(200));
+      expect(await _ping(rig), 'pong');
+      await _teardown(rig);
+    }, timeout: const Timeout(Duration(seconds: 90)));
   });
 }

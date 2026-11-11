@@ -117,31 +117,27 @@ Future<void> _abortedCall(RpcCallerEndpoint caller) async {
 void main() {
   group('finishedStreams under deadline-aborted calls', () {
     // WITNESS: without the cap this reached 2996 and kept climbing.
-    test(
-      'stays bounded across many aborted calls',
-      () async {
-        final h = _build();
+    test('stays bounded across many aborted calls', () async {
+      final h = _build();
 
-        for (var i = 0; i < 2500; i++) {
-          await _abortedCall(h.caller);
-        }
-        // Let every late trailer land and re-add its id.
-        await Future<void>.delayed(const Duration(seconds: 4));
+      for (var i = 0; i < 2500; i++) {
+        await _abortedCall(h.caller);
+      }
+      // Let every late trailer land and re-add its id.
+      await Future<void>.delayed(const Duration(seconds: 4));
 
-        final n = await _finished(h.server);
-        expect(
-          n,
-          lessThanOrEqualTo(_cap),
-          reason:
-              'finishedStreams reached $n after 2500 aborted calls; it retains '
-              'one id per call and nothing prunes it again',
-        );
+      final n = await _finished(h.server);
+      expect(
+        n,
+        lessThanOrEqualTo(_cap),
+        reason:
+            'finishedStreams reached $n after 2500 aborted calls; it retains '
+            'one id per call and nothing prunes it again',
+      );
 
-        await h.caller.close();
-        await h.responder.close();
-      },
-      timeout: const Timeout(Duration(minutes: 3)),
-    );
+      await h.caller.close();
+      await h.responder.close();
+    }, timeout: const Timeout(Duration(minutes: 3)));
   });
 
   group('the surrounding behaviour is unchanged', () {

@@ -289,30 +289,26 @@ void main() {
     timeout: const Timeout(Duration(seconds: 90)),
   );
 
-  test(
-    'GUARD: keepalive does not disturb a live connection',
-    () async {
-      final transport = await connectThroughRelay(
-        pingInterval: const Duration(milliseconds: 200),
-      );
-      final caller = RpcCallerEndpoint(transport: transport);
+  test('GUARD: keepalive does not disturb a live connection', () async {
+    final transport = await connectThroughRelay(
+      pingInterval: const Duration(milliseconds: 200),
+    );
+    final caller = RpcCallerEndpoint(transport: transport);
 
-      // Many ping intervals pass while the connection is used normally.
-      for (var i = 0; i < 8; i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 150));
-        final r = await caller
-            .unary<RpcString, RpcString>(
-              serviceName: 'Svc',
-              methodName: 'Echo',
-              request: '$i'.rpc,
-              requestCodec: _codec,
-              responseCodec: _codec,
-            )
-            .timeout(const Duration(seconds: 8));
-        expect(r.value, 'echo-ok');
-      }
-      expect((await transport.health()).message, contains('ready'));
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    // Many ping intervals pass while the connection is used normally.
+    for (var i = 0; i < 8; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      final r = await caller
+          .unary<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: 'Echo',
+            request: '$i'.rpc,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .timeout(const Duration(seconds: 8));
+      expect(r.value, 'echo-ok');
+    }
+    expect((await transport.health()).message, contains('ready'));
+  }, timeout: const Timeout(Duration(seconds: 90)));
 }

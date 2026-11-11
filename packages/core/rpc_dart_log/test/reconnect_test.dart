@@ -101,11 +101,10 @@ void main() {
     }
     // Records are buffered (not lost), nothing more reached collector #1.
     expect(out.bufferedCount + out.inFlightCount, greaterThan(0));
-    expect(
-      _messages(c1.received),
-      ['pre-1', 'pre-2'],
-      reason: 'no record may leak to the dead collector #1',
-    );
+    expect(_messages(c1.received), [
+      'pre-1',
+      'pre-2',
+    ], reason: 'no record may leak to the dead collector #1');
 
     // -- Phase 3: RECONNECT to collector #2 ----------------------------------
     await _pumpUntil(

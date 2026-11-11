@@ -129,35 +129,31 @@ void main() {
     },
   );
 
-  test(
-    'GUARD a connection that held up starts the count over',
-    () async {
-      final attempts = <int>[];
-      var built = 0;
-      final connection = RpcClientConnection(
-        transportFactory: (_) async {
-          built++;
-          // Two failures, then a connection that lasts past the stability
-          // threshold, then failures again. Without the reset the count it
-          // left off at (2) runs out on the first failure after it.
-          if (built == 3) return _T(const Duration(milliseconds: 5500));
-          throw StateError('down');
-        },
-        backoff: _backoff,
-        maxAttempts: 3,
-        onStateChanged: (s) {
-          if (s is RpcClientConnecting) attempts.add(s.attempt);
-        },
-      );
-      addTearDown(connection.dispose);
+  test('GUARD a connection that held up starts the count over', () async {
+    final attempts = <int>[];
+    var built = 0;
+    final connection = RpcClientConnection(
+      transportFactory: (_) async {
+        built++;
+        // Two failures, then a connection that lasts past the stability
+        // threshold, then failures again. Without the reset the count it
+        // left off at (2) runs out on the first failure after it.
+        if (built == 3) return _T(const Duration(milliseconds: 5500));
+        throw StateError('down');
+      },
+      backoff: _backoff,
+      maxAttempts: 3,
+      onStateChanged: (s) {
+        if (s is RpcClientConnecting) attempts.add(s.attempt);
+      },
+    );
+    addTearDown(connection.dispose);
 
-      connection.connect();
-      await connection.state
-          .firstWhere((s) => s is RpcClientDisconnected)
-          .timeout(const Duration(seconds: 10));
-      // 1-3 up to the long-lived connection; after it drops, 2 and 3 again.
-      expect(attempts, [1, 2, 3, 2, 3]);
-    },
-    timeout: const Timeout(Duration(seconds: 20)),
-  );
+    connection.connect();
+    await connection.state
+        .firstWhere((s) => s is RpcClientDisconnected)
+        .timeout(const Duration(seconds: 10));
+    // 1-3 up to the long-lived connection; after it drops, 2 and 3 again.
+    expect(attempts, [1, 2, 3, 2, 3]);
+  }, timeout: const Timeout(Duration(seconds: 20)));
 }

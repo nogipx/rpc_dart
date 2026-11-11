@@ -84,42 +84,30 @@ Future<({RpcStatus? status, String? value})> call(
 }
 
 void main() {
-  test(
-    'a refusal the policy itself forbids still carries its status',
-    () async {
-      // maxHeaders: 1 admits the status-only trailer and nothing larger, so the
-      // full refusal (status + message) cannot go out.
-      final r = await call(const RpcSecurityPolicy(maxHeaders: 1));
+  test('a refusal the policy itself forbids still carries its status', () async {
+    // maxHeaders: 1 admits the status-only trailer and nothing larger, so the
+    // full refusal (status + message) cannot go out.
+    final r = await call(const RpcSecurityPolicy(maxHeaders: 1));
 
-      expect(
-        r.status,
-        RpcStatus.invalidArgument,
-        reason:
-            'the peer was told the stream ended without a status — UNAVAILABLE, '
-            'which reads as retryable — for a deterministic policy rejection',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+    expect(
+      r.status,
+      RpcStatus.invalidArgument,
+      reason:
+          'the peer was told the stream ended without a status — UNAVAILABLE, '
+          'which reads as retryable — for a deterministic policy rejection',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD: a refusal that fits keeps its message',
-    () async {
-      // The fallback must be a fallback. With room for both headers the peer has
-      // to keep getting the text, or the fix has traded the diagnosis away for
-      // every refusal rather than the ones that cannot fit.
-      final r = await call(const RpcSecurityPolicy(maxHeaders: 4));
-      expect(r.status, RpcStatus.invalidArgument);
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('GUARD: a refusal that fits keeps its message', () async {
+    // The fallback must be a fallback. With room for both headers the peer has
+    // to keep getting the text, or the fix has traded the diagnosis away for
+    // every refusal rather than the ones that cannot fit.
+    final r = await call(const RpcSecurityPolicy(maxHeaders: 4));
+    expect(r.status, RpcStatus.invalidArgument);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test(
-    'GUARD: an ordinary call is untouched',
-    () async {
-      final r = await call(const RpcSecurityPolicy(maxHeaders: 32));
-      expect(r.value, 'x');
-    },
-    timeout: const Timeout(Duration(seconds: 60)),
-  );
+  test('GUARD: an ordinary call is untouched', () async {
+    final r = await call(const RpcSecurityPolicy(maxHeaders: 32));
+    expect(r.value, 'x');
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

@@ -57,36 +57,32 @@ void main() {
     await Future<void>.delayed(const Duration(seconds: 1));
   }
 
-  test(
-    'a throwing register releases the endpoint',
-    () async {
-      server = RpcHttp2Server(
-        host: '127.0.0.1',
-        port: 0,
-        mode: RpcResponderMode((e) {
-          e.registerServiceContract(_Contract());
-          throw StateError('DI failed while registering contracts');
-        }),
-      );
-      await server.start();
+  test('a throwing register releases the endpoint', () async {
+    server = RpcHttp2Server(
+      host: '127.0.0.1',
+      port: 0,
+      mode: RpcResponderMode((e) {
+        e.registerServiceContract(_Contract());
+        throw StateError('DI failed while registering contracts');
+      }),
+    );
+    await server.start();
 
-      await connectAndDrop(3);
+    await connectAndDrop(3);
 
-      expect(
-        server.endpoints,
-        isEmpty,
-        reason: 'the endpoint was registered before the callback that threw',
-      );
-      expect(
-        _disposed,
-        3,
-        reason:
-            'closing the endpoint is what disposes the contracts; without it the '
-            'application keeps whatever they hold for the life of the process',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+    expect(
+      server.endpoints,
+      isEmpty,
+      reason: 'the endpoint was registered before the callback that threw',
+    );
+    expect(
+      _disposed,
+      3,
+      reason:
+          'closing the endpoint is what disposes the contracts; without it the '
+          'application keeps whatever they hold for the life of the process',
+    );
+  }, timeout: const Timeout(Duration(seconds: 90)));
 
   test(
     'GUARD: the server still serves once the callback stops throwing',

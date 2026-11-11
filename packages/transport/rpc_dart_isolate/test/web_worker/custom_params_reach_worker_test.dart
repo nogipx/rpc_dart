@@ -57,56 +57,44 @@ Future<String> _paramsSeenByWorker(Map<String, dynamic> customParams) async {
 }
 
 void main() {
-  test(
-    'WITNESS: customParams reach the worker entrypoint',
-    () async {
-      expect(
-        await _paramsSeenByWorker(const {'hello': 'worker', 'n': '7'}),
-        'hello=worker,n=7',
-        reason:
-            'the worker was handed an empty map: `.first` consumed the '
-            'flow-control advertisement instead of the init message',
-      );
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+  test('WITNESS: customParams reach the worker entrypoint', () async {
+    expect(
+      await _paramsSeenByWorker(const {'hello': 'worker', 'n': '7'}),
+      'hello=worker,n=7',
+      reason:
+          'the worker was handed an empty map: `.first` consumed the '
+          'flow-control advertisement instead of the init message',
+    );
+  }, timeout: const Timeout(Duration(seconds: 90)));
 
-  test(
-    'GUARD: an empty customParams map still starts the worker',
-    () async {
-      // Load-bearing: the fix must not make the absence of params a failure, and
-      // a worker that never starts would fail the witness for the wrong reason.
-      expect(await _paramsSeenByWorker(const {}), '');
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+  test('GUARD: an empty customParams map still starts the worker', () async {
+    // Load-bearing: the fix must not make the absence of params a failure, and
+    // a worker that never starts would fail the witness for the wrong reason.
+    expect(await _paramsSeenByWorker(const {}), '');
+  }, timeout: const Timeout(Duration(seconds: 90)));
 
-  test(
-    'GUARD: ordinary RPC still works',
-    () async {
-      // The init handling sits on the path every call depends on.
-      final spawned = await RpcIsolateTransport.spawn(
-        entrypoint: _unusedEntrypoint,
-        workerUri: Uri.base.resolve('echo_worker.dart.js'),
-        customParams: const {'k': 'v'},
-      );
-      final caller = RpcCallerEndpoint(transport: spawned.transport);
-      try {
-        final response = await caller
-            .unary<RpcString, RpcString>(
-              serviceName: 'EchoService',
-              methodName: 'Echo',
-              requestCodec: RpcString.codec,
-              responseCodec: RpcString.codec,
-              request: 'ping'.rpc,
-            )
-            .timeout(const Duration(seconds: 15));
-        expect(response.value, 'echo:ping');
-      } finally {
-        await caller.close();
-        spawned.kill();
-      }
-    },
-    timeout: const Timeout(Duration(seconds: 90)),
-  );
+  test('GUARD: ordinary RPC still works', () async {
+    // The init handling sits on the path every call depends on.
+    final spawned = await RpcIsolateTransport.spawn(
+      entrypoint: _unusedEntrypoint,
+      workerUri: Uri.base.resolve('echo_worker.dart.js'),
+      customParams: const {'k': 'v'},
+    );
+    final caller = RpcCallerEndpoint(transport: spawned.transport);
+    try {
+      final response = await caller
+          .unary<RpcString, RpcString>(
+            serviceName: 'EchoService',
+            methodName: 'Echo',
+            requestCodec: RpcString.codec,
+            responseCodec: RpcString.codec,
+            request: 'ping'.rpc,
+          )
+          .timeout(const Duration(seconds: 15));
+      expect(response.value, 'echo:ping');
+    } finally {
+      await caller.close();
+      spawned.kill();
+    }
+  }, timeout: const Timeout(Duration(seconds: 90)));
 }
