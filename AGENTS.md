@@ -35,7 +35,7 @@ Transport-agnostic RPC framework for Dart. This is a **monorepo** managed with
 
 ## Toolchain — ALWAYS use fvm
 
-The SDK is pinned via fvm (Flutter 3.38.3 / Dart 3.10.1). Never call bare
+The SDK is pinned via fvm (Flutter 3.50.0 / Dart 3.14.0). Never call bare
 `dart`/`flutter`.
 
 - `fvm dart ...`, `fvm flutter ...`
@@ -148,10 +148,9 @@ manual versions and CHANGELOGs, `bump:rpc_dart`, `publish:dry`,
 
 ## Known caveats
 
-- **generator**: its tests are `build_test`, which a pub workspace cannot run,
-  so every `test*` script excludes the package and there is NO
-  `melos run test:generator`. Its `lib/` is covered by `analyze`. The manual
-  way to run the tests is in [MAINTAINING.md](MAINTAINING.md).
+- **generator**: the ordinary test scripts exclude its builder suite. Run
+  `fvm dart test` in `packages/core/rpc_dart_generator` separately; its tests
+  discover the workspace package config. Its `lib/` is covered by `analyze`.
 - **native code needs its OWN two scripts — the ordinary gate never touches it.**
   A change to `rpc_dart_wasm`'s Swift or Kotlin plugin ships unverified unless
   you run `melos run analyze:native` and `melos run test:wasm:device` on BOTH

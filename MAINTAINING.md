@@ -88,16 +88,16 @@ on `Version X already exists`, after the other packages have gone out.
 
 ## The generator's tests
 
-`rpc_dart_generator`'s golden tests are `build_test`, which needs a per-package
-`.dart_tool/package_config.json` — and a pub workspace centralises that at the
-root. So they are incompatible with this layout and every `test*` script
-excludes the package. **There is NO `melos run test:generator`.** Every one of
-the generator's four test files imports `build_test`, so nothing there can be
-run from inside the workspace at all. The only way is the manual one the root
-`pubspec.yaml` documents next to the `test` script: temporarily remove
-`resolution: workspace` from the generator's pubspec AND its entry from the
-root `workspace:` list, `fvm dart pub get` in the package, run, then put both
-back. Its `lib/` is still covered by `melos run analyze`.
+`rpc_dart_generator`'s builder tests use `build_test`. The test helpers discover
+both standalone and workspace package configs; no pubspec edits are needed.
+The ordinary `test*` scripts still exclude the package, so run its suite explicitly:
+
+```sh
+cd packages/core/rpc_dart_generator
+fvm dart test
+```
+
+Its `lib/` is also covered by `melos run analyze`.
 
 ## The wasm plugin's native code
 

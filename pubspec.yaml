@@ -115,8 +115,8 @@ melos:
           packages/transport/rpc_dart_wasm/test
 
     # --- Tests ---
-    # generator is excluded: its build_test golden tests are incompatible with
-    # pub-workspace layout (no per-member package_config.json). Run it on its own.
+    # Run the generator's builder suite separately in its package directory.
+    # Its helpers discover the workspace package_config.json.
     test:
       description: Run dart tests across packages that have a test/ dir.
       run: fvm dart test --reporter expanded

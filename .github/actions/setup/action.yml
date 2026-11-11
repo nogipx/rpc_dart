@@ -27,7 +27,7 @@ runs:
     # below fails the job if the two drift apart.
     - uses: dart-lang/setup-dart@v1
       with:
-        sdk: 3.10.1
+        sdk: 3.14.0
         problem-matcher: false
 
     # fvm keeps its managed SDKs under ~/fvm — cache them so `fvm install` only

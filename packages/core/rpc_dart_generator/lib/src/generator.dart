@@ -1441,10 +1441,8 @@ class _GrpcDescriptorBuilder {
     return [
       for (final level in chain.reversed)
         for (final field in level.element.fields)
-          // isSynthetic, not its analyzer-10 replacement: the supported range
-          // starts at analyzer 9.
-          // ignore: deprecated_member_use
-          if (!field.isStatic && !field.isSynthetic)
+          // Getter-backed synthetic fields are not message storage.
+          if (!field.isStatic && field.nonSynthetic == field)
             (
               field: field,
               type: level.getGetter(field.name ?? '')?.returnType ?? field.type,

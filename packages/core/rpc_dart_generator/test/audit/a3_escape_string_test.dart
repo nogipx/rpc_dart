@@ -23,7 +23,6 @@ import 'dart:io';
 import 'package:build/build.dart';
 import 'package:build_test/build_test.dart';
 import 'package:package_config/package_config.dart';
-import 'package:path/path.dart' as p;
 import 'package:rpc_dart_generator/builder.dart';
 import 'package:test/test.dart';
 
@@ -131,8 +130,7 @@ class Foo implements IRpcSerializable {
 }
 
 Future<PackageConfig> _loadPackageConfig() async {
-  final file = File(
-    p.join(Directory.current.path, '.dart_tool', 'package_config.json'),
-  );
-  return loadPackageConfigUri(file.uri);
+  final config = await findPackageConfig(Directory.current);
+  if (config == null) throw StateError('Run fvm dart pub get first.');
+  return config;
 }

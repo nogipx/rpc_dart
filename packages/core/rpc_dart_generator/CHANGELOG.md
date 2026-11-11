@@ -4,6 +4,10 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.7.1
+
+- Support analyzer 9–14 and build 4/5 while retaining Dart 3.10 compatibility.
+
 ## 0.7.0
 
 - **Regenerate.** A per-method codec override now applies to its own method
