@@ -106,14 +106,13 @@ class _CountingTransport implements IRpcTransport {
   IRpcReconnectOutcome? get reconnectOutcome => inner.reconnectOutcome;
 }
 
-/// A decorator that deliberately declares its own, different, policy. The
-/// server must use it as it is.
+/// A decorator that tightens the endpoint policy below the transport's limit.
 class _OpinionatedTransport extends _CountingTransport {
   _OpinionatedTransport(super.inner);
 
   @override
   RpcSecurityPolicy get securityPolicy =>
-      const RpcSecurityPolicy(maxActiveStreams: 11);
+      const RpcSecurityPolicy(maxActiveStreams: 2);
 }
 
 /// Forwards each flow-credit call to the inner transport's credit.
@@ -402,11 +401,12 @@ void main() {
   });
 
   test('a wrapper with its own policy is left alone', () async {
-    // GUARD: overriding securityPolicy is how a decorator says "I mean a
-    // different policy", so it must win over the inner one.
+    // The endpoint honors the wrapper's policy within the underlying
+    // transport's limit, which is also advertised in HTTP/2 SETTINGS.
     final r = await _run(_OpinionatedTransport.new);
-    expect(r.transport.securityPolicy.maxActiveStreams, 11);
-    expect(r.open, greaterThan(3));
+    expect(r.transport, same(r.wrapper));
+    expect(r.transport.securityPolicy.maxActiveStreams, 2);
+    expect(r.open, 2);
   });
 
   group('the upload bound survives the wrapper', () {
