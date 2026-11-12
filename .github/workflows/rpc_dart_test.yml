@@ -62,6 +62,33 @@ jobs:
         run: fvm dart pub get
       - name: Run tests (no external services)
         run: melos run test:unit
+      - name: Show test failures
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          for report in sorted(Path('packages').glob('**/.dart_tool/test-report.json')):
+              tests = {}
+              for line in report.read_text().splitlines():
+                  event = json.loads(line)
+                  if event['type'] == 'testStart':
+                      tests[event['test']['id']] = event['test']['name']
+                  elif event['type'] == 'error':
+                      name = tests.get(event['testID'], 'unknown test')
+                      print(f"{report}: {name}", flush=True)
+                      print(event['error'], flush=True)
+                      print(event['stackTrace'], flush=True)
+          PY
+      - name: Upload complete test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: packages/**/.dart_tool/test-report.json
+          include-hidden-files: true
+          if-no-files-found: ignore
 
   acp:
     name: "ACP schema and compatibility"

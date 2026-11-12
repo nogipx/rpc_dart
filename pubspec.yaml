@@ -148,7 +148,9 @@ melos:
     # about CI, not about this package.
     test:unit:
       description: Tests excluding service-dependent packages.
-      run: fvm dart test --reporter failures-only
+      run: >-
+        fvm dart test --reporter failures-only
+        --file-reporter json:.dart_tool/test-report.json
       exec:
         concurrency: 4
       packageFilters:
