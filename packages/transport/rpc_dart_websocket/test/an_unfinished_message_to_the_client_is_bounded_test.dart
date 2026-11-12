@@ -30,64 +30,38 @@ Uint8List _header({required bool first, required int length}) {
   return h;
 }
 
-/// A server that upgrades by hand and then writes [fragments] fragments of an
-/// unfinished message. Completes with how many it wrote before the client
-/// closed the socket, or null when it never did.
-Future<(int port, Future<int?> closedAfter)> _floodingServer(
-  int fragments,
-) async {
-  final server = await ServerSocket.bind('127.0.0.1', 0);
-  final result = Completer<int?>();
-  server.listen((socket) {
-    final buf = <int>[];
-    var closed = false;
-    late StreamSubscription<List<int>> sub;
-    sub = socket.listen(
-      (data) async {
-        buf.addAll(data);
-        final text = latin1.decode(buf);
-        if (!text.contains('\r\n\r\n')) return;
-        sub.onData((_) {});
-        final key = RegExp(
-          r'Sec-WebSocket-Key: (\S+)',
-          caseSensitive: false,
-        ).firstMatch(text)!.group(1)!;
-        final accept = base64.encode(
-          sha1.convert(utf8.encode('$key$_guid')).bytes,
-        );
-        socket.write(
-          'HTTP/1.1 101 Switching Protocols\r\n'
-          'Upgrade: websocket\r\nConnection: Upgrade\r\n'
-          'Sec-WebSocket-Accept: $accept\r\n\r\n',
-        );
-        final chunk = Uint8List(_fragment);
-        int? closedAfter;
-        for (var i = 0; i < fragments; i++) {
-          if (closed) {
-            closedAfter = i;
-            break;
-          }
-          socket
-            ..add(_header(first: i == 0, length: _fragment))
-            ..add(chunk);
-          try {
-            await socket.flush().timeout(const Duration(seconds: 2));
-          } catch (_) {
-            closedAfter = i;
-            break;
-          }
-        }
-        await Future<void>.delayed(const Duration(milliseconds: 300));
-        if (closedAfter == null && closed) closedAfter = fragments;
-        socket.destroy();
-        if (!result.isCompleted) result.complete(closedAfter);
-      },
-      onDone: () => closed = true,
-      onError: (Object _) => closed = true,
-    );
-  });
-  unawaited(result.future.whenComplete(server.close));
-  return (server.port, result.future);
+/// Skips complete client frames (including RPC control traffic) until a pong.
+Future<void> _waitForPong(StreamIterator<Uint8List> incoming) async {
+  final buffered = <int>[];
+  while (await incoming.moveNext()) {
+    buffered.addAll(incoming.current);
+    while (buffered.length >= 2) {
+      final shortLength = buffered[1] & 0x7f;
+      final headerLength =
+          2 +
+          (shortLength == 126
+              ? 2
+              : shortLength == 127
+              ? 8
+              : 0);
+      if (buffered.length < headerLength) break;
+      final data = ByteData.sublistView(Uint8List.fromList(buffered));
+      final length = switch (shortLength) {
+        126 => data.getUint16(2),
+        127 => data.getUint64(2),
+        _ => shortLength,
+      };
+      final frameLength =
+          headerLength + ((buffered[1] & 0x80) != 0 ? 4 : 0) + length;
+      if (buffered.length < frameLength) break;
+      if ((buffered[0] & 0x0f) == 10) {
+        expect(length, 0);
+        return;
+      }
+      buffered.removeRange(0, frameLength);
+    }
+  }
+  fail('a message at the ceiling must keep the connection alive');
 }
 
 void main() {
@@ -96,28 +70,68 @@ void main() {
     () async {
       // The guard's floor is the default policy's reassembly cap, so a
       // stricter policy still answers a whole oversized message per call.
-      final ceilingFragments =
-          const RpcSecurityPolicy().effectiveMaxBufferedBytes ~/ _fragment + 1;
-      final (port, closedAfter) = await _floodingServer(64);
-      final rssBefore = ProcessInfo.currentRss;
-      final transport = await RpcWebSocketCallerTransport.connect(
-        Uri.parse('ws://127.0.0.1:$port'),
+      final ceiling = const RpcSecurityPolicy().maxChannelFrameBytes;
+      final server = await ServerSocket.bind('127.0.0.1', 0);
+      addTearDown(server.close);
+      final accepted = Completer<Socket>();
+      server.listen(accepted.complete);
+      final connecting = RpcWebSocketCallerTransport.connect(
+        Uri.parse('ws://127.0.0.1:${server.port}'),
       );
+      final socket = await accepted.future;
+      addTearDown(socket.destroy);
+      final incoming = StreamIterator(socket);
+      addTearDown(incoming.cancel);
+
+      final request = <int>[];
+      while (!latin1.decode(request).contains('\r\n\r\n')) {
+        expect(await incoming.moveNext(), isTrue);
+        request.addAll(incoming.current);
+      }
+      final key = RegExp(
+        r'Sec-WebSocket-Key: (\S+)',
+        caseSensitive: false,
+      ).firstMatch(latin1.decode(request))!.group(1)!;
+      final accept = base64.encode(
+        sha1.convert(utf8.encode('$key$_guid')).bytes,
+      );
+      socket.write(
+        'HTTP/1.1 101 Switching Protocols\r\n'
+        'Upgrade: websocket\r\nConnection: Upgrade\r\n'
+        'Sec-WebSocket-Accept: $accept\r\n\r\n',
+      );
+      await socket.flush();
+      final transport = await connecting;
       addTearDown(transport.close);
 
-      final after = await closedAfter.timeout(const Duration(seconds: 60));
-      final grown = (ProcessInfo.currentRss - rssBefore) ~/ (1024 * 1024);
-      expect(
-        after,
-        isNotNull,
-        reason: '64 MiB of one message buffered, RSS +$grown MiB',
-      );
-      // Bounds what was sent, not when it was noticed; see the server test.
-      expect(
-        after,
-        lessThanOrEqualTo(ceilingFragments + 8),
-        reason: 'RSS +$grown MiB',
-      );
+      final chunk = Uint8List(_fragment);
+      for (var sent = 0; sent < ceiling;) {
+        final remaining = ceiling - sent;
+        final length = remaining < _fragment ? remaining : _fragment;
+        socket
+          ..add(_header(first: sent == 0, length: length))
+          ..add(Uint8List.sublistView(chunk, 0, length));
+        await socket.flush();
+        sent += length;
+      }
+
+      // A pong proves the client read the entire allowed prefix and is still
+      // alive, independently of the writer's TCP buffers.
+      socket.add(const [0x89, 0]);
+      await socket.flush();
+      await _waitForPong(incoming).timeout(const Duration(seconds: 5));
+
+      // Send only the next header. Refusal must happen before its payload,
+      // without depending on how much TCP buffers before a writer sees EOF.
+      socket.add(_header(first: false, length: _fragment));
+      await socket.flush();
+      try {
+        await (() async {
+          while (await incoming.moveNext()) {}
+        })().timeout(const Duration(seconds: 5));
+      } on SocketException {
+        // A reset also means the client destroyed the refused socket.
+      }
     },
     timeout: const Timeout(Duration(minutes: 2)),
   );
