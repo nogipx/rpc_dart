@@ -17,11 +17,14 @@ import 'package:test/test.dart';
 void main() {
   test('nothing is delivered after the overrun error', () async {
     const window = 16 * 1024;
+    final refused = Completer<void>();
     final socket = await ServerSocket.bind('127.0.0.1', 0);
     socket.listen((client) {
       final conn = http2.ServerTransportConnection.viaSocket(client);
       conn.incomingStreams.listen((stream) async {
-        stream.onTerminated = (_) {};
+        stream.onTerminated = (_) {
+          if (!refused.isCompleted) refused.complete();
+        };
         await for (final m in stream.incomingMessages) {
           if (m.endStream) break;
         }
@@ -70,7 +73,8 @@ void main() {
     subscription.pause();
     await transport.sendMetadata(id, RpcMetadata.forClientRequest('S', 'M'));
     await transport.finishSending(id);
-    await Future<void>.delayed(const Duration(milliseconds: 500));
+    // Keep the consumer paused until the peer observes the overrun reset.
+    await refused.future.timeout(const Duration(seconds: 5));
     subscription.resume();
     await done.future.timeout(const Duration(seconds: 5));
 
@@ -85,6 +89,9 @@ void main() {
   test('no request payload reaches the handler after the overrun', () async {
     const window = 16 * 1024;
     final events = <String>[];
+    final refused = Completer<void>();
+    final handler = Completer<StreamSubscription<RpcTransportMessage>>();
+    final cancelled = Completer<void>();
     final socket = await ServerSocket.bind('127.0.0.1', 0);
     socket.listen((client) {
       final responder = RpcHttp2ResponderTransport(
@@ -93,6 +100,10 @@ void main() {
       );
       var opened = false;
       responder.incomingMessages.listen((m) {
+        if (m.metadata?.getHeaderValue(RpcHeaders.xClientCancelled) != null &&
+            !refused.isCompleted) {
+          refused.complete();
+        }
         if (opened) return;
         opened = true;
         final subscription = responder.getMessagesForStream(m.streamId).listen((
@@ -100,16 +111,14 @@ void main() {
         ) {
           if (m.metadata?.getHeaderValue(RpcHeaders.xClientCancelled) != null) {
             events.add('cancel');
+            if (!cancelled.isCompleted) cancelled.complete();
           } else if (m.payload != null) {
             events.add('data');
           }
         }, onError: (Object _) {});
         // A handler that stops reading is what overruns the window.
         subscription.pause();
-        Future<void>.delayed(
-          const Duration(milliseconds: 500),
-          subscription.resume,
-        );
+        handler.complete(subscription);
       }, onError: (Object _) {});
     }, onError: (Object _) {});
     final transport = await RpcHttp2CallerTransport.connect(
@@ -134,7 +143,9 @@ void main() {
       }
       await Future<void>.delayed(const Duration(milliseconds: 5));
     }
-    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    await refused.future.timeout(const Duration(seconds: 5));
+    (await handler.future).resume();
+    await cancelled.future.timeout(const Duration(seconds: 5));
 
     final cancelAt = events.indexOf('cancel');
     expect(cancelAt, isNonNegative, reason: 'the window must be overrun');
