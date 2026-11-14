@@ -43,3 +43,15 @@ Future<void> main() async {
 - Add `rpc_data_sqlite` for local-first / SQLCipher / web OPFS builds. The package re-exports `rpc_data`.
 - Add `rpc_data_postgres` for server-side JSONB-backed storage.
 - Keep `rpc_data` alone for pure in-memory or to build your own adapter.
+
+## Batch validation and journal retention
+
+`SchemaValidationEngine.validateRecordsOrThrow(records)` reads one fresh schema
+per collection for that batch. Later batches read the registry again, so schema
+changes and newly added schemas take effect without retaining a stale cache.
+`BaseDataRepository` uses it for bulk upserts and snapshot import chunks.
+
+Bulk changes and deletions apply journal retention once per affected collection
+per 512 events, including a partial batch that fails. This bounds temporary
+journal growth from each operation to one batch beyond the retention limit. Record and
+change-event order are preserved; bulk writes are not an atomic transaction.

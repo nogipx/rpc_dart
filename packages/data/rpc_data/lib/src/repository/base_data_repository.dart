@@ -89,6 +89,10 @@ abstract class BaseDataRepository implements IDataRepository {
     await validator.validateOrThrow(collection: collection, payload: payload);
   }
 
+  Future<void> _validateRecords(Iterable<DataRecord> records) async {
+    await _schemaValidation?.validateRecordsOrThrow(records);
+  }
+
   String _generateId(String collection) {
     if (_idGenerator != null) {
       return _idGenerator(collection);
@@ -105,8 +109,9 @@ abstract class BaseDataRepository implements IDataRepository {
 
   Future<DataChangeEvent> _recordEvent(
     DataChangeType type,
-    DataRecord record,
-  ) async {
+    DataRecord record, {
+    Map<String, DateTime>? retentionBatch,
+  }) async {
     final occurredAt = _clock();
     final event = await _journal.recordChange(
       type: type,
@@ -117,15 +122,16 @@ abstract class BaseDataRepository implements IDataRepository {
       record: record,
     );
     _changeController.add(event);
-    await _enforceJournalRetention(record.collection, occurredAt: occurredAt);
+    await _retainJournal(record.collection, occurredAt, retentionBatch);
     return event;
   }
 
   Future<DataChangeEvent> _recordDeletion(
     String collection,
     String id,
-    int nextVersion,
-  ) async {
+    int nextVersion, {
+    Map<String, DateTime>? retentionBatch,
+  }) async {
     final occurredAt = _clock();
     final event = await _journal.recordDeletion(
       collection: collection,
@@ -134,8 +140,58 @@ abstract class BaseDataRepository implements IDataRepository {
       occurredAt: occurredAt,
     );
     _changeController.add(event);
-    await _enforceJournalRetention(collection, occurredAt: occurredAt);
+    await _retainJournal(collection, occurredAt, retentionBatch);
     return event;
+  }
+
+  Future<void> _retainJournal(
+    String collection,
+    DateTime occurredAt,
+    Map<String, DateTime>? batch,
+  ) async {
+    if (batch == null) {
+      await _enforceJournalRetention(collection, occurredAt: occurredAt);
+    } else if (batch[collection] == null ||
+        occurredAt.isAfter(batch[collection]!)) {
+      batch[collection] = occurredAt;
+    }
+  }
+
+  Future<void> _recordBatch(
+    Iterable<MapEntry<DataChangeType, DataRecord>> events,
+  ) async {
+    final retention = <String, DateTime>{};
+    Future<void> flush() async {
+      while (retention.isNotEmpty) {
+        final collection = retention.keys.first;
+        final occurredAt = retention.remove(collection)!;
+        await _enforceJournalRetention(collection, occurredAt: occurredAt);
+      }
+    }
+
+    var pending = 0;
+    try {
+      for (final entry in events) {
+        final record = entry.value;
+        if (entry.key == DataChangeType.deleted) {
+          await _recordDeletion(
+            record.collection,
+            record.id,
+            record.version + 1,
+            retentionBatch: retention,
+          );
+        } else {
+          await _recordEvent(entry.key, record, retentionBatch: retention);
+        }
+        // Bound temporary retention growth for arbitrarily large bulk calls.
+        if (++pending == databaseImportBatchSize) {
+          await flush();
+          pending = 0;
+        }
+      }
+    } finally {
+      await flush();
+    }
   }
 
   Future<void> _enforceJournalRetention(
@@ -202,13 +258,11 @@ abstract class BaseDataRepository implements IDataRepository {
           'Snapshot contains records outside of a collection block',
         );
       }
-      for (final record in pending) {
-        await _validatePayload(record.collection, record.payload);
-      }
+      await _validateRecords(pending);
       await storage.writeRecords(pending);
-      for (final record in pending) {
-        await _recordEvent(DataChangeType.snapshot, record);
-      }
+      await _recordBatch(
+        pending.map((record) => MapEntry(DataChangeType.snapshot, record)),
+      );
       importedRecords += pending.length;
       pending.clear();
     }
@@ -222,9 +276,9 @@ abstract class BaseDataRepository implements IDataRepository {
         collection,
         chunkSize: BaseDataRepository.databaseExportChunkSize,
       )) {
-        for (final record in chunk) {
-          await _recordDeletion(collection, record.id, record.version + 1);
-        }
+        await _recordBatch(
+          chunk.map((record) => MapEntry(DataChangeType.deleted, record)),
+        );
       }
       await storage.deleteCollection(collection);
     }
@@ -436,9 +490,9 @@ abstract class BaseDataRepository implements IDataRepository {
           collection,
           chunkSize: BaseDataRepository.databaseExportChunkSize,
         )) {
-          for (final record in chunk) {
-            await _recordDeletion(collection, record.id, record.version + 1);
-          }
+          await _recordBatch(
+            chunk.map((record) => MapEntry(DataChangeType.deleted, record)),
+          );
         }
         await storage.deleteCollection(collection);
       }
@@ -617,9 +671,9 @@ abstract class BaseDataRepository implements IDataRepository {
 
     await _journal.purgeCollection(request.collection);
 
-    for (final record in existingRecords) {
-      await _recordDeletion(request.collection, record.id, record.version + 1);
-    }
+    await _recordBatch(
+      existingRecords.map((record) => MapEntry(DataChangeType.deleted, record)),
+    );
 
     return true;
   }
@@ -679,13 +733,9 @@ abstract class BaseDataRepository implements IDataRepository {
     }
 
     if (writes.isNotEmpty) {
-      for (final record in writes) {
-        await _validatePayload(record.collection, record.payload);
-      }
+      await _validateRecords(writes);
       await storage.writeRecords(writes);
-      for (final entry in events) {
-        await _recordEvent(entry.key, entry.value);
-      }
+      await _recordBatch(events);
     }
 
     return results;
@@ -700,13 +750,11 @@ abstract class BaseDataRepository implements IDataRepository {
       request.ids,
     );
 
-    for (final id in request.ids) {
-      final record = existing[id];
-      if (record == null) {
-        continue;
-      }
-      await _recordDeletion(request.collection, record.id, record.version + 1);
-    }
+    await _recordBatch([
+      for (final id in request.ids)
+        if (existing[id] case final record?)
+          MapEntry(DataChangeType.deleted, record),
+    ]);
 
     return removed;
   }

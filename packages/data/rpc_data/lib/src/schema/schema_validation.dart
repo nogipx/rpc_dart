@@ -3,8 +3,16 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:async';
+
 import 'package:meta/meta.dart';
 import 'package:rpc_data/rpc_data.dart';
+
+final _schemaBatchKey = Object();
+typedef _SchemaBatch = ({
+  SchemaValidationEngine engine,
+  Map<String, Future<CollectionSchema?>> schemas,
+});
 
 /// Policy switches for per-collection schema enforcement.
 @immutable
@@ -396,6 +404,14 @@ class SchemaValidator {
     }
 
     final active = await registry.getActiveSchema(collection);
+    return _validateWithSchema(payload, active);
+  }
+
+  List<SchemaValidationError> _validateWithSchema(
+    Map<String, dynamic> payload,
+    CollectionSchema? active,
+  ) {
+    if (!config.strictValidation) return const [];
     final policy = active?.policy ?? config.defaultPolicy();
     if (!policy.enabled || !policy.requireValidation) {
       return const [];
@@ -678,7 +694,45 @@ class SchemaValidationEngine {
     required String collection,
     required Map<String, dynamic> payload,
   }) async {
-    final errors = await _validator.validate(collection, payload);
+    final batch = Zone.current[_schemaBatchKey] as _SchemaBatch?;
+    final List<SchemaValidationError> errors;
+    if (batch != null &&
+        identical(batch.engine, this) &&
+        config.strictValidation) {
+      final active = await batch.schemas.putIfAbsent(
+        collection,
+        () => _registry.getActiveSchema(collection),
+      );
+      errors = _validator._validateWithSchema(payload, active);
+    } else {
+      errors = await _validator.validate(collection, payload);
+    }
+    _throwIfInvalid(collection, errors);
+  }
+
+  /// Validates a batch using one fresh schema snapshot per collection.
+  /// A later batch reads the registry again, including missing schemas.
+  Future<void> validateRecordsOrThrow(Iterable<DataRecord> records) async {
+    await ensureReady();
+    await runZoned<Future<void>>(
+      () async {
+        for (final record in records) {
+          await validateOrThrow(
+            collection: record.collection,
+            payload: record.payload,
+          );
+        }
+      },
+      zoneValues: {
+        _schemaBatchKey: (
+          engine: this,
+          schemas: <String, Future<CollectionSchema?>>{},
+        ),
+      },
+    );
+  }
+
+  void _throwIfInvalid(String collection, List<SchemaValidationError> errors) {
     if (errors.isEmpty) {
       return;
     }

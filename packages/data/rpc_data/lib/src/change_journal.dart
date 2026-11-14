@@ -205,6 +205,7 @@ final class InMemoryDataChangeJournal implements DataChangeJournal {
     if (history == null || history.isEmpty) {
       return;
     }
+    final previousLength = history.length;
     if (retainAfter != null) {
       history.removeWhere((event) => event.occurredAt.isBefore(retainAfter));
     }
@@ -212,7 +213,7 @@ final class InMemoryDataChangeJournal implements DataChangeJournal {
       history.removeRange(0, history.length - maxEvents);
     }
 
-    _rebuildIndex(collection);
+    if (history.length != previousLength) _rebuildIndex(collection);
   }
 
   @override
