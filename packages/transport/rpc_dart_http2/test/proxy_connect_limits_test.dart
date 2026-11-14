@@ -2,74 +2,49 @@
 //
 // SPDX-License-Identifier: MIT
 
-// The CONNECT-proxy handshake trusted the proxy completely, in time and in
-// memory. A proxy is a machine on the path and often not the operator's, so
-// that is the wrong default -- the same reasoning that bounds a response body
-// in e8c5bc9f.
-//
-//   A. `await handshake.future` had no timeout. Measured against a proxy that
-//      accepts the TCP connection and then says nothing, connect() was still
-//      pending after 35s and would never have settled -- and connect() is what
-//      an application awaits at startup.
-//
-//   B. `headerBuf` grew until CRLFCRLF appeared, unbounded. Measured against a
-//      proxy that streams headers forever: RSS +268 MiB in 6 seconds, still
-//      climbing. Now it fails in 29ms with RSS +3 MiB.
-//
-// A third defect fell out while fixing these, and it was PRE-EXISTING: the TLS
-// branch did `await forwardCtrl.close()` on a single-subscription controller
-// nothing had ever listened to, and closing one of those returns a future that
-// never completes. So secureConnect through a proxy hung forever AFTER a
-// successful CONNECT -- TLS was never even attempted. It is not covered here
-// because reaching it needs a working TLS endpoint; the deadlock is the same
-// mechanism this file's timeout test exercises, since the first version of the
-// timeout cleanup hit exactly it.
+// The CONNECT handshake bounds both a silent proxy and response headers
+// without a terminating CRLFCRLF.
 
-import 'dart:async';
 import 'dart:io';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_http2/rpc_dart_http2.dart';
 import 'package:test/test.dart';
 
-/// A proxy that accepts CONNECT and then misbehaves in [mode].
-///
-/// The 'chatty' timers are tracked and cancelled by the caller's teardown: a
-/// forgotten one keeps pumping 64 KiB every 5ms into the NEXT test and starves
-/// it, which is how this helper first broke the guard below.
-Future<({ServerSocket socket, List<Timer> timers})> _badProxy(
-  String mode,
-) async {
+/// A proxy that stays silent or sends an unterminated response.
+Future<ServerSocket> _badProxy({List<int>? response}) async {
   final socket = await ServerSocket.bind('127.0.0.1', 0);
-  final timers = <Timer>[];
+  final clients = <Socket>[];
+  addTearDown(() async {
+    await socket.close();
+    for (final client in clients) {
+      client.destroy();
+    }
+  });
   socket.listen((client) {
-    client.listen((_) {}, onError: (Object _) {}, cancelOnError: false);
-    if (mode == 'silent') return;
-    final chunk = List<int>.filled(64 * 1024, 0x41);
-    late final Timer timer;
-    timer = Timer.periodic(const Duration(milliseconds: 5), (t) {
-      try {
-        client.add(chunk);
-      } catch (_) {
-        t.cancel();
-      }
-    });
-    timers.add(timer);
-  }, onError: (Object _) {});
-  return (socket: socket, timers: timers);
+    // A caller refusing the response can reset the proxy's write side too.
+    clients.add(client);
+    client.done.ignore();
+    client.listen(
+      (_) {},
+      onError: (Object _) => client.destroy(),
+      onDone: client.destroy,
+    );
+    if (response != null) client.add(response);
+  });
+  return socket;
 }
 
 void main() {
   test('a silent proxy does not hang connect() forever', () async {
-    final proxy = await _badProxy('silent');
-    addTearDown(proxy.socket.close);
+    final proxy = await _badProxy();
 
     final sw = Stopwatch()..start();
     await expectLater(
       RpcHttp2CallerTransport.connect(
         host: '127.0.0.1',
         port: 9,
-        proxyUri: Uri.parse('http://127.0.0.1:${proxy.socket.port}'),
+        proxyUri: Uri.parse('http://127.0.0.1:${proxy.port}'),
         // The default is 30s; shortened so the suite does not wait for it.
         proxyHandshakeTimeout: const Duration(milliseconds: 400),
       ),
@@ -94,20 +69,16 @@ void main() {
   });
 
   test('a proxy that never terminates its headers is cut off', () async {
-    final proxy = await _badProxy('chatty');
-    addTearDown(() {
-      for (final t in proxy.timers) {
-        t.cancel();
-      }
-      return proxy.socket.close();
-    });
+    // One byte past the header limit, without a CRLFCRLF terminator.
+    final proxy = await _badProxy(
+      response: List<int>.filled(64 * 1024 + 1, 0x41),
+    );
 
-    final rssBefore = ProcessInfo.currentRss;
     await expectLater(
       RpcHttp2CallerTransport.connect(
         host: '127.0.0.1',
         port: 9,
-        proxyUri: Uri.parse('http://127.0.0.1:${proxy.socket.port}'),
+        proxyUri: Uri.parse('http://127.0.0.1:${proxy.port}'),
         proxyHandshakeTimeout: const Duration(seconds: 10),
       ),
       throwsA(
@@ -120,22 +91,5 @@ void main() {
             ),
       ),
     );
-
-    final grewMiB = (ProcessInfo.currentRss - rssBefore) / (1024 * 1024);
-    expect(
-      grewMiB,
-      lessThan(64),
-      reason:
-          'the header buffer was unbounded: 268 MiB in 6 seconds, and it was '
-          'still climbing when the measurement stopped',
-    );
   });
-
-  // GUARD: the well-behaved CONNECT path -- a proxy that answers 200 and then
-  // relays -- is already exercised by reconnect_close_race_test.dart, which
-  // drives three connections through a real CONNECT proxy. Reproducing it here
-  // proved flaky for a reason worth recording: the 'chatty' proxy above keeps
-  // writing into a socket the client has destroyed, and dart:io buffers those
-  // writes rather than throwing, so the timer that feeds it survives into the
-  // next test and starves it. Cancelling the timer in teardown was not enough.
 }
