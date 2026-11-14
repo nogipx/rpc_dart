@@ -4,6 +4,11 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 2.1.2
+
+- Reuse the verified SHA-256 digest in the write result instead of hashing the
+  same blob again when a checksum was supplied.
+
 ## 2.1.1
 
 - Requires `rpc_dart` 7.0.0.

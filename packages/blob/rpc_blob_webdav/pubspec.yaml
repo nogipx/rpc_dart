@@ -4,7 +4,7 @@
 
 name: rpc_blob_webdav
 description: WebDAV storage adapter for rpc_blob, compatible with dart2js, the Dart VM and Flutter.
-version: 2.1.1
+version: 2.1.2
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
