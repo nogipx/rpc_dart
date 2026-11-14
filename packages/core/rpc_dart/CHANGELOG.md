@@ -4,6 +4,20 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 7.2.0
+
+- Add opt-in `RpcReconnectPolicy` for transient RPC statuses and server retry
+  delays, plus a configurable reconnect stability window (`stableAfter`).
+- Add manual `suspend`/`resume`, shared RPC ping probes, optional heartbeat and
+  immutable `RpcClientConnectionMetrics`, without a Flutter dependency.
+  Suspending can retain the live transport; resume checks it before reuse.
+- Bound ping writes as well as responses by timeout and cancellation, so a
+  stalled send cannot hold a liveness check indefinitely.
+- Keep transport detachment safe when suspension and reconnection overlap.
+- Share responder deadline cancellation between handler and processor scopes.
+  Collect responder metrics in one pass without copying registration maps.
+- Invoke an observer's completion hook only once when that hook throws.
+
 ## 7.1.0
 
 - Add `package:rpc_dart/internal.dart` with selected stream lifetime, bounded
