@@ -56,6 +56,35 @@ void main() {
   });
 
   group('LogCollectorOutput', () {
+    test('eviction returns the original charge when nested data changed', () {
+      final output = LogCollectorOutput(
+        uri: Uri.parse('ws://127.0.0.1:1'),
+        device: DeviceInfo(name: 'Phone', app: 'App'),
+        bufferSize: 1,
+      );
+      addTearDown(output.dispose);
+      final payload = <String, Object>{'value': 'small'};
+      output.write(
+        LogEvent(
+          timestamp: DateTime.now(),
+          level: RpcLogLevel.info,
+          scope: 'test',
+          message: 'first',
+          data: {'nested': payload},
+        ),
+      );
+      payload['value'] = 'x' * 10000;
+      final second = LogEvent(
+        timestamp: DateTime.now(),
+        level: RpcLogLevel.info,
+        scope: 'test',
+        message: 'second',
+      );
+      output.write(second);
+      expect(output.bufferedCount, 1);
+      expect(output.bufferedBytes, approxJsonBytes(second.toJson()));
+    });
+
     test('WITNESS records waiting offline are evicted by bufferBytes', () {
       // Nothing listens on port 1, so every record stays buffered.
       final output = LogCollectorOutput(

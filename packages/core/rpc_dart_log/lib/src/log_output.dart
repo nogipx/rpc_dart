@@ -15,6 +15,8 @@ import 'contract/log_collector_contract.dart';
 import 'contract/messages.dart';
 import 'protocol.dart';
 
+typedef _BufferedRecord = ({LogCollectorRecord record, int bytes});
+
 /// A [LogOutput] that sends log records to a remote logCollector collector
 /// over WebSocket using rpc_dart contracts.
 ///
@@ -80,9 +82,9 @@ class LogCollectorOutput extends LogOutput {
   final Future<WebSocketChannel> Function(Uri uri) _channelFactory;
 
   // Records not yet sent. Ordered: oldest at the head.
-  final Queue<LogCollectorRecord> _buffer = Queue();
+  final Queue<_BufferedRecord> _buffer = Queue();
   // Records sent but not yet acked, in send order. Requeued on reconnect.
-  final Queue<LogCollectorRecord> _inFlight = Queue();
+  final Queue<_BufferedRecord> _inFlight = Queue();
   // Bytes charged by the records in both queues; a record keeps its charge
   // while it moves between them.
   int _bytes = 0;
@@ -160,8 +162,9 @@ class LogCollectorOutput extends LogOutput {
   }
 
   void _enqueue(LogCollectorRecord record) {
-    _buffer.addLast(record);
-    _bytes += approxJsonBytes(record.payload);
+    final bytes = approxJsonBytes(record.payload);
+    _buffer.addLast((record: record, bytes: bytes));
+    _bytes += bytes;
     _trim();
   }
 
@@ -175,7 +178,7 @@ class LogCollectorOutput extends LogOutput {
       final dropped = _inFlight.isNotEmpty
           ? _inFlight.removeFirst()
           : _buffer.removeFirst();
-      _bytes -= approxJsonBytes(dropped.payload);
+      _bytes -= dropped.bytes;
     }
   }
 
@@ -283,25 +286,22 @@ class LogCollectorOutput extends LogOutput {
         final record = _buffer.removeFirst();
         _inFlight.addLast(record);
         _caller
-            .send(record)
-            .then(
-              (_) => _onAck(record),
-              onError: (Object _) => _onSendError(record),
-            );
+            .send(record.record)
+            .then((_) => _onAck(record), onError: (Object _) => _onSendError());
       }
     } finally {
       _pumping = false;
     }
   }
 
-  void _onAck(LogCollectorRecord record) {
+  void _onAck(_BufferedRecord record) {
     if (_disposed) return;
-    if (_inFlight.remove(record)) _bytes -= approxJsonBytes(record.payload);
+    if (_inFlight.remove(record)) _bytes -= record.bytes;
     // Acked record freed a slot in the in-flight window: keep draining.
     _pump();
   }
 
-  void _onSendError(LogCollectorRecord record) {
+  void _onSendError() {
     if (_disposed) return;
     if (!_connected) return;
     // The send failed: the underlying transport is broken. Mark offline and
