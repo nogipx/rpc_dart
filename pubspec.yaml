@@ -624,16 +624,18 @@ melos:
     # commit.
     tag:release:
       description: >
-        Tag every public package at its current pubspec version
+        Tag every published public package at its current pubspec version
         (`<pkg>-<version>`) and push commits + tags. Idempotent — existing tags
         are skipped. Run standalone to finish a release that aborted midway.
       run: |
         set -e
+        # Only versions already on pub.dev are tagged, including after a partial
+        # release. An unpublished sibling must not acquire a release tag.
         # Public packages (publish_to != none) come from `melos list --no-private`;
         # `-l` prints `name version path`, so no hardcoded list. rpc_dart_wasm is
         # appended by hand for the same workspace reason.
         {
-          fvm dart run melos list --no-private -l
+          fvm dart run melos list --no-private --published -l
           echo "rpc_dart_wasm $(awk '/^version:/{print $2; exit}' packages/transport/rpc_dart_wasm/pubspec.yaml)"
         } | while read -r name ver _; do
           tag="$name-$ver"

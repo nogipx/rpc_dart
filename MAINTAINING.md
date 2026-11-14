@@ -84,7 +84,9 @@ on `Version X already exists`, after the other packages have gone out.
    finish. The upload is irreversible but everything after it is idempotent, so
    re-running the whole release is wrong — it would try to re-publish what
    already landed. Tags name where a version lives, so tagging separately is
-   well-defined. (Do not hand-craft the tags: the format has to match.)
+   well-defined. Only workspace package versions already present on pub.dev
+   are tagged; unpublished siblings are skipped. (Do not hand-craft the tags:
+   the format has to match.)
 
 ## The generator's tests
 
