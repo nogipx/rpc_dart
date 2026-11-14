@@ -149,7 +149,7 @@ melos:
     test:unit:
       description: Tests excluding service-dependent packages.
       run: >-
-        fvm dart test --reporter failures-only
+        fvm dart test --reporter expanded
         --file-reporter json:.dart_tool/test-report.json
       exec:
         concurrency: 4
