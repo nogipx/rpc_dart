@@ -24,7 +24,8 @@ class StreamDistributor<T extends IRpcSerializable> {
   late final LogScope _logger;
 
   // Основной контроллер для публикации данных
-  final StreamController<_StreamMessage<T>> _mainController;
+  final StreamController<(_StreamMessage<T>, List<_ClientStreamWrapper<T>>)>
+  _mainController;
 
   // Хранилище активных клиентских стримов
   final Map<String, _ClientStreamWrapper<T>> _clientStreams;
@@ -48,10 +49,19 @@ class StreamDistributor<T extends IRpcSerializable> {
   ///
   /// [config] позволяет настроить поведение дистрибьютора
   StreamDistributor({StreamDistributorConfig? config, LogScope? logger})
-    : _mainController = StreamController<_StreamMessage<T>>.broadcast(),
+    : _mainController =
+          StreamController<
+            (_StreamMessage<T>, List<_ClientStreamWrapper<T>>)
+          >(),
       _clientStreams = <String, _ClientStreamWrapper<T>>{},
       _logger = logger ?? LogScope.noop,
       _config = config ?? StreamDistributorConfig() {
+    _mainController.stream.listen((pending) {
+      final (message, recipients) = pending;
+      for (final recipient in recipients) {
+        _handleClientMessage(recipient, message);
+      }
+    });
     // Настраиваем периодическую очистку неактивных стримов
     if (_config.enableAutoCleanup) {
       _startCleanupTimer();
@@ -67,6 +77,13 @@ class StreamDistributor<T extends IRpcSerializable> {
   /// Получить текущие метрики дистрибьютора
   StreamDistributorMetrics get metrics => _metrics.snapshot();
 
+  void _enqueue(
+    _StreamMessage<T> message,
+    List<_ClientStreamWrapper<T>> recipients,
+  ) {
+    if (recipients.isNotEmpty) _mainController.add((message, recipients));
+  }
+
   /// Публикация данных во все активные стримы
   ///
   /// Сообщение автоматически оборачивается в [_StreamMessage] и
@@ -79,6 +96,12 @@ class StreamDistributor<T extends IRpcSerializable> {
       return 0;
     }
 
+    final recipients = <_ClientStreamWrapper<T>>[];
+    var activeClients = 0;
+    for (final client in _clientStreams.values) {
+      recipients.add(client);
+      if (!client.isPaused && !client.controller.isClosed) activeClients++;
+    }
     final wrappedEvent = _StreamMessage<T>(
       message: event,
       streamId: 'broadcast',
@@ -88,16 +111,11 @@ class StreamDistributor<T extends IRpcSerializable> {
     _logger.internal(
       'Публикация данных в основной контроллер: type=${event.runtimeType}',
     );
-    _mainController.add(wrappedEvent);
+    _enqueue(wrappedEvent, recipients);
 
     // Обновляем метрики
     _metrics.incrementTotalMessages();
     _metrics.recordMessageSize(event);
-
-    // Подсчитываем активных клиентов для отчета о доставке
-    final activeClients = _clientStreams.values
-        .where((wrapper) => !wrapper.isPaused && !wrapper.controller.isClosed)
-        .length;
 
     _logger.internal(
       'Опубликовано сообщение всем клиентам (доступно: $activeClients)',
@@ -129,22 +147,18 @@ class StreamDistributor<T extends IRpcSerializable> {
     // Если нет подходящих клиентов, не публикуем
     if (targetClients.isEmpty) return 0;
 
-    // Создаем метаданные с целевыми клиентами
-    final targetIds = targetClients.map((client) => client.clientId).toList();
-    final enrichedMetadata = {...?metadata, 'targetClients': targetIds};
-
     // Создаем и публикуем сообщение
     final wrappedEvent = _StreamMessage<T>(
       message: event,
       streamId: 'filtered',
-      metadata: enrichedMetadata,
+      metadata: metadata,
     );
 
     _logger.internal(
       'Публикация фильтрованных данных: clients=${targetClients.length}, '
       'type=${event.runtimeType}',
     );
-    _mainController.add(wrappedEvent);
+    _enqueue(wrappedEvent, targetClients);
 
     // Обновляем метрики
     _metrics.incrementTotalMessages();
@@ -216,13 +230,15 @@ class StreamDistributor<T extends IRpcSerializable> {
     _logger.info('Создание нового стрима для клиента: $clientId');
 
     // Создаем контроллер с поддержкой паузы/возобновления
-    final clientController = StreamController<T>.broadcast(
+    late final StreamController<T> clientController;
+    clientController = StreamController<T>.broadcast(
       onCancel: () {
         // Вызываем пользовательский обработчик, если он предоставлен
         onCancel?.call();
 
         // Автоматически удаляем стрим при отмене подписки, если включено
-        if (_config.autoRemoveOnCancel) {
+        if (_config.autoRemoveOnCancel &&
+            identical(_clientStreams[clientId]?.controller, clientController)) {
           _logger.internal(
             'Автоматическое закрытие стрима при отмене подписки: $clientId',
           );
@@ -240,16 +256,9 @@ class StreamDistributor<T extends IRpcSerializable> {
       },
     );
 
-    // Создаем подписку на основной стрим
-    final subscription = _subscribeClientToMainStream(
-      clientId,
-      clientController,
-    );
-
     // Сохраняем информацию о клиентском стриме
     _clientStreams[clientId] = _ClientStreamWrapper(
       controller: clientController,
-      subscription: subscription,
       clientId: clientId,
       createdAt: DateTime.now(),
     );
@@ -265,39 +274,22 @@ class StreamDistributor<T extends IRpcSerializable> {
     return clientController.stream;
   }
 
-  /// Создает подписку на основной стрим для конкретного клиентского контроллера
-  StreamSubscription<_StreamMessage<T>> _subscribeClientToMainStream(
-    String clientId,
-    StreamController<T> clientController,
-  ) {
-    final subscription = _mainController.stream.listen(
-      (wrappedEvent) =>
-          _handleClientMessage(clientId, clientController, wrappedEvent),
-      onError: (error, stackTrace) =>
-          _handleClientError(clientController, error, stackTrace),
-      onDone: () => _handleClientStreamDone(clientController),
-    );
-
-    return subscription;
-  }
-
   /// Обрабатывает сообщение для конкретного клиента
   void _handleClientMessage(
-    String clientId,
-    StreamController<T> clientController,
+    _ClientStreamWrapper<T> wrapper,
     _StreamMessage<T> wrappedEvent,
   ) {
+    final clientId = wrapper.clientId;
+    final clientController = wrapper.controller;
+    if (!identical(_clientStreams[clientId], wrapper)) return;
+    if (wrappedEvent.streamId != 'broadcast' &&
+        wrappedEvent.streamId != 'filtered' &&
+        wrappedEvent.metadata?['type'] == 'clientRequest')
+      return;
     if (clientController.isClosed) {
       _logger.internal(
         'Попытка отправки сообщения в закрытый контроллер: $clientId',
       );
-      return;
-    }
-
-    // Получаем информацию о клиенте
-    final wrapper = _clientStreams[clientId];
-    if (wrapper == null) {
-      _logger.warning('Стрим-обертка для клиента $clientId не найдена');
       return;
     }
 
@@ -308,14 +300,6 @@ class StreamDistributor<T extends IRpcSerializable> {
     if (wrapper.isPaused) {
       if (_logger.isInternal) {
         _logger.internal('Клиент $clientId на паузе, сообщение пропущено');
-      }
-      return;
-    }
-
-    // Проверяем, относится ли сообщение к этому клиенту
-    if (!_isMessageForClient(clientId, wrappedEvent)) {
-      if (_logger.isInternal) {
-        _logger.internal('Сообщение не предназначено для клиента $clientId');
       }
       return;
     }
@@ -339,57 +323,6 @@ class StreamDistributor<T extends IRpcSerializable> {
         stackTrace: stackTrace,
       );
       _metrics.incrementErrors();
-    }
-  }
-
-  /// Проверяет, предназначено ли сообщение для данного клиента
-  bool _isMessageForClient(String clientId, _StreamMessage<T> wrappedEvent) {
-    // Принимаем сообщения только если:
-    // 1. Это широковещательное сообщение
-    if (wrappedEvent.streamId == 'broadcast') {
-      return true;
-    }
-
-    // 2. Или сообщение направлено конкретно этому клиенту и не является запросом
-    if (wrappedEvent.streamId == clientId &&
-        wrappedEvent.metadata?['type'] != 'clientRequest') {
-      return true;
-    }
-
-    // 3. Это фильтрованное сообщение и клиент в списке целевых
-    if (wrappedEvent.streamId == 'filtered' &&
-        wrappedEvent.metadata?.containsKey('targetClients') == true) {
-      final targetClients = wrappedEvent.metadata!['targetClients'] as List;
-      if (targetClients.contains(clientId)) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  /// Обрабатывает ошибку для клиентского стрима
-  void _handleClientError(
-    StreamController<T> clientController,
-    dynamic error,
-    StackTrace? stackTrace,
-  ) {
-    if (!clientController.isClosed) {
-      try {
-        clientController.addError(error, stackTrace);
-        _metrics.incrementErrors();
-      } catch (e) {
-        _logger.error('Ошибка при передаче ошибки клиенту', error: e);
-      }
-    }
-  }
-
-  /// Обрабатывает завершение основного стрима
-  void _handleClientStreamDone(StreamController<T> clientController) {
-    if (!clientController.isClosed) {
-      clientController.close().catchError((e) {
-        _logger.error('Ошибка при закрытии клиентского контроллера', error: e);
-      });
     }
   }
 
@@ -450,15 +383,11 @@ class StreamDistributor<T extends IRpcSerializable> {
 
       // Добавляем в основной контроллер для логирования и передачи конкретному клиенту
       if (!_mainController.isClosed) {
-        _mainController.add(wrappedEvent);
+        _enqueue(wrappedEvent, [wrapper]);
 
         // Обновляем метрики
         _metrics.incrementTotalMessages();
         _metrics.recordMessageSize(event);
-        wrapper.incrementReceivedMessages();
-
-        // Обновляем время последней активности
-        wrapper.updateLastActivity();
         return true;
       }
     } catch (e) {
@@ -482,7 +411,21 @@ class StreamDistributor<T extends IRpcSerializable> {
     _logger.internal(
       'Публикация обернутого сообщения: streamId=${wrappedEvent.streamId}',
     );
-    _mainController.add(wrappedEvent);
+    final recipients = switch (wrappedEvent.streamId) {
+      'broadcast' => _clientStreams.values.toList(),
+      'filtered' => [
+        for (final id
+            in (wrappedEvent.metadata?['targetClients'] as Iterable? ??
+                    const [])
+                .toSet())
+          if (_clientStreams[id] case final client?) client,
+      ],
+      _ => [
+        if (wrappedEvent.metadata?['type'] != 'clientRequest')
+          if (_clientStreams[wrappedEvent.streamId] case final client?) client,
+      ],
+    };
+    _enqueue(wrappedEvent, recipients);
     _metrics.incrementTotalMessages();
   }
 
@@ -551,11 +494,16 @@ class StreamDistributor<T extends IRpcSerializable> {
   /// Закрытие всех клиентских стримов
   Future<void> closeAllClientStreams() async {
     if (_isDisposed) return;
+    await _closeAllClientStreams();
+  }
 
-    final clientCount = _clientStreams.length;
-    final clientIds = _clientStreams.keys.toList();
-    for (final clientId in clientIds) {
-      await closeClientStream(clientId);
+  Future<void> _closeAllClientStreams() async {
+    final clients = _clientStreams.values.toList();
+    final clientCount = clients.length;
+    _clientStreams.clear();
+    for (final client in clients) {
+      await client.dispose();
+      _metrics.decrementCurrentStreams();
     }
 
     _logger.internal('Закрыты все клиентские стримы ($clientCount)');
@@ -638,7 +586,7 @@ class StreamDistributor<T extends IRpcSerializable> {
 
     // Закрываем все клиентские контроллеры
     final clientCount = _clientStreams.length;
-    await closeAllClientStreams();
+    await _closeAllClientStreams();
 
     // Закрываем основной контроллер
     try {
@@ -814,7 +762,6 @@ class _DistributorMetrics {
 /// Класс для хранения информации о клиентском стриме
 class _ClientStreamWrapper<T extends IRpcSerializable> {
   final StreamController<T> controller;
-  final StreamSubscription<_StreamMessage<T>> subscription;
   final String clientId;
   final DateTime createdAt;
 
@@ -829,7 +776,6 @@ class _ClientStreamWrapper<T extends IRpcSerializable> {
 
   _ClientStreamWrapper({
     required this.controller,
-    required this.subscription,
     required this.clientId,
     required this.createdAt,
   }) : lastActivity = DateTime.now();
@@ -856,7 +802,6 @@ class _ClientStreamWrapper<T extends IRpcSerializable> {
 
   /// Освобождение ресурсов
   Future<void> dispose() async {
-    await subscription.cancel();
     if (!controller.isClosed) {
       await controller.close();
     }
