@@ -4,6 +4,16 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 1.5.1
+
+- Count each targeted delivery once instead of incrementing its counter both
+  at publication and delivery.
+- Select recipients once and preserve publication order through one routing
+  queue. Targeted messages no longer visit every client, and filtered delivery
+  avoids repeated linear membership searches.
+- Prevent queued messages and cancellation callbacks from affecting a new
+  client with a reused id. Distributor disposal closes all client streams.
+
 ## 1.5.0
 
 - A watcher or subscriber that stops reading no longer holds every change or
