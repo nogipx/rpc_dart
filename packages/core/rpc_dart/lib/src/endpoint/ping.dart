@@ -226,22 +226,6 @@ final class RpcEndpointPingExchange {
       });
     }
 
-    try {
-      if (_log.isInternal) {
-        _log.internal('Sending ping request [streamId: $streamId]');
-      }
-      await transport.sendMetadata(streamId, metadata, endStream: true);
-    } catch (error, stackTrace) {
-      await subscription.cancel();
-      await tokenSubscription?.cancel();
-      _log.error(
-        'Error sending ping [streamId: $streamId]',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      rethrow;
-    }
-
     Future<RpcEndpointPingResult> future = completer.future;
 
     if (timeout != null) {
@@ -260,9 +244,29 @@ final class RpcEndpointPingExchange {
         },
       );
     }
+    future.ignore();
 
     try {
+      if (cancellationToken?.isCancelled ?? false) {
+        throw RpcCancelledException(
+          cancellationToken!.reason ?? 'Ping cancelled',
+        );
+      }
+      if (_log.isInternal) {
+        _log.internal('Sending ping request [streamId: $streamId]');
+      }
+      // Bound the send as well as the response. A transport waiting for write
+      // room can otherwise hold a resume probe past cancellation or timeout.
+      await Future.any<void>([
+        transport.sendMetadata(streamId, metadata, endStream: true),
+        future.then<void>((_) {}),
+      ]);
       return await future;
+    } catch (error, stackTrace) {
+      // Also settles the timeout's source when sending failed first, so its
+      // timer is released. Both futures already have error handlers.
+      completeError(error, stackTrace);
+      rethrow;
     } finally {
       await subscription.cancel();
       await tokenSubscription?.cancel();

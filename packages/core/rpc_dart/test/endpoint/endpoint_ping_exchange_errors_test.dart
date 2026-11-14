@@ -13,6 +13,43 @@ import '../utils/transport_wrappers.dart';
 
 void main() {
   group('RpcEndpointPingExchange', () {
+    for (final cancelled in [false, true]) {
+      test(
+        'a stalled send is bounded by ${cancelled ? 'cancellation' : 'timeout'}',
+        () async {
+          final (client, server) = RpcChannelTransport.memoryPair();
+          addTearDown(client.close);
+          addTearDown(server.close);
+          final token = RpcCancellationToken();
+          final exchange = RpcEndpointPingExchange(
+            transport: HangingEndOfStreamTransport(client),
+            streamId: client.createStream(),
+            sentAt: DateTime.timestamp(),
+          );
+          final result = exchange.execute(
+            metadata: RpcMetadata.forClientRequest(
+              RpcEndpointPingProtocol.serviceName,
+              RpcEndpointPingProtocol.methodName,
+            ),
+            timeout: cancelled
+                ? const Duration(days: 1)
+                : const Duration(milliseconds: 50),
+            cancellationToken: token,
+          );
+          final checked = expectLater(
+            result,
+            throwsA(
+              cancelled
+                  ? isA<RpcCancelledException>()
+                  : isA<TimeoutException>(),
+            ),
+          );
+          if (cancelled) token.cancel('stop probe');
+          await checked.timeout(const Duration(seconds: 2));
+        },
+      );
+    }
+
     test('throws TimeoutException when no trailers arrive', () async {
       final (client, server) = RpcChannelTransport.memoryPair();
       addTearDown(() async {
