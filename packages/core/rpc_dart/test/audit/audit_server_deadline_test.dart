@@ -7,7 +7,7 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
-/// The server now enforces the client's grpc-timeout deadline: it arms a timer
+/// The server enforces the client's grpc-timeout deadline: it arms a timer
 /// and cancels the handler's cancellation token when the deadline passes (Dart
 /// cannot preempt a bare `await`, but cooperative handlers and request-stream
 /// readers unwind). A normal call within the deadline must still succeed.
@@ -19,33 +19,63 @@ void main() {
       final client = RpcCallerEndpoint(transport: clientT);
       final probe = _Probe();
       server.registerServiceContract(_DeadlineContract(probe));
-      server.start();
+      final deadline = Completer<void Function()>();
+      Timer? deadlineTimer;
+      runZoned(
+        server.start,
+        zoneSpecification: ZoneSpecification(
+          createTimer: (self, parent, zone, duration, callback) {
+            final timer = parent.createTimer(zone, duration, callback);
+            if (duration >= const Duration(minutes: 4) &&
+                duration <= const Duration(minutes: 5)) {
+              deadlineTimer = timer;
+              deadline.complete(() {
+                timer.cancel();
+                zone.run(callback);
+              });
+            }
+            return timer;
+          },
+        ),
+      );
+      addTearDown(() async {
+        deadlineTimer?.cancel();
+        await client.close();
+        await server.close();
+      });
       final caller = _DeadlineCaller(client);
 
-      try {
-        await caller.slow(
+      final call = expectLater(
+        caller.slow(
           _Msg('x'),
-          context: RpcContext.empty().withTimeout(
-            const Duration(milliseconds: 120),
-          ),
-        );
-      } catch (_) {
-        // Client surfaces its own timeout; we only care about the server.
-      }
-      // Give the handler time to observe the cancellation and unwind.
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+          context: RpcContext.empty().withTimeout(const Duration(minutes: 5)),
+        ),
+        throwsA(isA<RpcDeadlineExceededException>()),
+      );
+      final token = await probe.started.future.timeout(
+        const Duration(seconds: 5),
+      );
+      expect(token.isCancelled, isFalse);
 
-      expect(probe.slowOutcome, 'cancelled');
-      expect(probe.cancelReason, 'deadline exceeded');
-
-      await client.close();
-      await server.close();
+      // Fire the server's deadline after dispatch, independently of the
+      // caller's timer and of how long startup takes under load.
+      final expire = await deadline.future.timeout(const Duration(seconds: 5));
+      expire();
+      expect(
+        await probe.cancelled.future.timeout(const Duration(seconds: 5)),
+        'deadline exceeded',
+      );
+      await call;
     });
 
     test('a call that completes within the deadline succeeds', () async {
       final (clientT, serverT) = RpcChannelTransport.memoryPair();
       final server = RpcResponderEndpoint(transport: serverT);
       final client = RpcCallerEndpoint(transport: clientT);
+      addTearDown(() async {
+        await client.close();
+        await server.close();
+      });
       server.registerServiceContract(_DeadlineContract(_Probe()));
       server.start();
       final caller = _DeadlineCaller(client);
@@ -55,16 +85,13 @@ void main() {
         context: RpcContext.empty().withTimeout(const Duration(seconds: 5)),
       );
       expect(r.value, 'ok:hi');
-
-      await client.close();
-      await server.close();
     });
   });
 }
 
 class _Probe {
-  String slowOutcome = 'none';
-  String? cancelReason;
+  final started = Completer<RpcCancellationToken>();
+  final cancelled = Completer<String?>();
 }
 
 final class _Msg implements IRpcSerializable {
@@ -91,17 +118,12 @@ final class _DeadlineContract extends RpcResponderContract {
     addUnaryMethod<_Msg, _Msg>(
       methodName: 'slow',
       handler: (m, {context}) async {
-        for (var i = 0; i < 40; i++) {
-          await Future<void>.delayed(const Duration(milliseconds: 25));
-          final token = context?.cancellationToken;
-          if (token?.isCancelled == true) {
-            probe.slowOutcome = 'cancelled';
-            probe.cancelReason = token!.reason;
-            throw StateError('cancelled');
-          }
-        }
-        probe.slowOutcome = 'ran-full';
-        return _Msg('done');
+        final token = context!.cancellationToken!;
+        probe.started.complete(token);
+        await token.cancelled;
+        probe.cancelled.complete(token.reason);
+        token.throwIfCancelled();
+        return m;
       },
       requestCodec: _Msg.codec,
       responseCodec: _Msg.codec,
