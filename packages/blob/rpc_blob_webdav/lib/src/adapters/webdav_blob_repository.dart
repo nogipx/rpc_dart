@@ -165,13 +165,13 @@ class WebDavBlobRepository implements IBlobRepository {
   Future<BlobWriteResult> writeBlob(BlobWriteRequest request) async {
     final id = request.id ?? _generateId();
     final bytes = await _collectBytes(request.bytes, request.length);
-    if (request.checksum != null) {
-      _verifyChecksum(
-        bytes,
-        request.checksum!,
-        algorithm: request.checksumAlgorithm,
-      );
-    }
+    final verifiedChecksum = request.checksum == null
+        ? null
+        : _verifyChecksum(
+            bytes,
+            request.checksum!,
+            algorithm: request.checksumAlgorithm,
+          );
     await _ensureCollection(request.collection);
 
     final now = _clock().toUtc();
@@ -237,7 +237,7 @@ class WebDavBlobRepository implements IBlobRepository {
         createdAt: createdAt,
         updatedAt: now,
         contentType: request.contentType,
-        checksum: sha256.convert(bytes).toString(),
+        checksum: verifiedChecksum ?? sha256.convert(bytes).toString(),
         metadata: request.metadata,
         downloadUrl: _objectUri(request.collection, id).toString(),
       ),
@@ -644,7 +644,7 @@ class WebDavBlobRepository implements IBlobRepository {
     return bytes;
   }
 
-  static void _verifyChecksum(
+  static String _verifyChecksum(
     Uint8List bytes,
     String expected, {
     ChecksumAlgorithm? algorithm,
@@ -659,6 +659,7 @@ class WebDavBlobRepository implements IBlobRepository {
             'Checksum mismatch: expected $expected actual $digest',
           );
         }
+        return digest;
     }
   }
 

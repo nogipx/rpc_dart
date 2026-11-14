@@ -235,14 +235,15 @@ void main() {
     final r = repo();
     final data = utf8.encode('verify me');
     final sum = sha256Hex(data);
-    await r.writeBlob(
+    final result = await r.writeBlob(
       BlobWriteRequest(
         collection: 'c',
         id: 'ok',
         bytes: _bytes(data),
-        checksum: sum,
+        checksum: sum.toUpperCase(),
       ),
     );
+    expect(result.descriptor.checksum, sum);
     expect(
       () => r.writeBlob(
         BlobWriteRequest(
