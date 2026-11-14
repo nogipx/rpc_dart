@@ -4,6 +4,17 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 7.1.0
+
+- Add `package:rpc_dart/internal.dart` with selected stream lifetime, bounded
+  relay, buffer accounting and peer-fault primitives for integrations, so they
+  can reuse RPC infrastructure without importing implementation files.
+- Share source ownership, pause/resume, cancellation and cleanup between RPC
+  relays and integration streams while preserving existing RPC stream behavior
+  and wire compatibility.
+- Avoid queue-entry allocations when bounded streams deliver directly to a ready
+  reader, and reuse native transport buffer budgets after queues drain.
+
 ## 7.0.0
 
 ### Upgrade both ends together

@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # Integration stream primitives
 
 `package:rpc_dart/internal.dart` is a deliberately selected infrastructure API
