@@ -32,6 +32,7 @@ final class RpcCallScope {
 
   /// The context this scope is bound to (if any).
   final RpcContext? _context;
+  final bool _managedDeadline;
 
   /// Where cleanup failures are reported.
   ///
@@ -61,9 +62,16 @@ final class RpcCallScope {
   /// [disposerTimeout] bounds each disposer; see [close].
   RpcCallScope({
     RpcContext? context,
+    Duration disposerTimeout = defaultDisposerTimeout,
+  }) : this._(context: context, disposerTimeout: disposerTimeout);
+
+  RpcCallScope._({
+    RpcContext? context,
     this.disposerTimeout = defaultDisposerTimeout,
-  }) : _context = context {
-    _wireDeadline();
+    bool managedDeadline = false,
+  }) : _context = context,
+       _managedDeadline = managedDeadline {
+    if (!managedDeadline) _wireDeadline();
     _wireCancellation();
   }
 

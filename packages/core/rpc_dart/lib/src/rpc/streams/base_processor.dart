@@ -269,7 +269,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
        _requestCodec = requestCodec,
        _responseCodec = responseCodec,
        _context = context,
-       _scope = RpcCallScope(context: context),
+       _scope = context?.createCallScope() ?? RpcCallScope(),
        _logger = logger?.child('StreamProcessor') ?? LogScope.noop {
     _parser = _transferParser(
       transport: transport,

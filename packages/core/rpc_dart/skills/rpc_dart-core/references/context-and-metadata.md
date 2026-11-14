@@ -107,6 +107,9 @@ from scratch instead loses the deadline and the cancellation.
   timeout. When it passes, the handler's `cancellationToken` is cancelled and
   the call is ended. The `grpc-timeout` header is still readable through
   `getHeader`.
+- The responder pipeline owns the deadline timer. Its handler and processor
+  scopes follow the same cancellation token and do not start extra deadline
+  timers. A standalone `RpcCallScope(context: context)` still enforces its own deadline.
 - A responder interceptor may shorten that: a context it passes to `next`
   with an earlier deadline (`call.context.withTimeout(d)`) is enforced the
   same way. A later deadline, or none, does not extend the caller's.

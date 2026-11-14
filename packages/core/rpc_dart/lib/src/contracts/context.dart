@@ -31,6 +31,15 @@ extension RpcContextInternals on RpcContext {
   /// This context carrying [scope] as its [RpcContext.callScope].
   RpcContext withCallScope(RpcCallScope scope) =>
       withValue(RpcContext._callScopeKey, scope);
+
+  /// Creates a scope that follows pipeline-owned deadline cancellation.
+  /// Processor scopes inherit that ownership from the handler's scope.
+  RpcCallScope createCallScope({bool deadlineManaged = false}) =>
+      RpcCallScope._(
+        context: this,
+        managedDeadline:
+            deadlineManaged || (callScope?._managedDeadline ?? false),
+      );
 }
 
 /// gRPC-style RPC context - holds call metadata, timeouts, cancellation

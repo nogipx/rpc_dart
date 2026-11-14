@@ -446,26 +446,31 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// HERE, not in one endpoint subclass: both [RpcResponderEndpoint] and
   /// [RpcPeerEndpoint] serve calls through this mixin, and the peer's counts
   /// must not read null.
-  _ResponderCounts _collectResponderMetrics() => (
-    registeredContracts: _respRegistry.contracts.length,
-    registeredMethods: _respRegistry.methods.length,
-    isListening: _respIsListening,
-    isDraining: _respIsDraining,
-    openStreams: _respStreams.length,
-    preMethodBufferedBytes: _respPreMethodBytes,
-    metadataStreams: _respStreams.values
-        .where((state) => state.hasMetadata)
-        .length,
-    bufferedMessages: _respStreams.values
-        .where((state) => state.lastPayloadMessage != null)
-        .length,
-    preBindBuffers: _respStreams.values
-        .where((state) => state.hasPreBindBuffered)
-        .length,
-    // The same source as the drain's count.
-    activeResponders: activeResponderCount,
-    contractKeys: List<String>.unmodifiable(_respRegistry.contracts.keys),
-  );
+  _ResponderCounts _collectResponderMetrics() {
+    var metadataStreams = 0;
+    var bufferedMessages = 0;
+    var preBindBuffers = 0;
+    var activeResponders = 0;
+    for (final state in _respStreams.values) {
+      if (state.hasMetadata) metadataStreams++;
+      if (state.lastPayloadMessage != null) bufferedMessages++;
+      if (state.hasPreBindBuffered) preBindBuffers++;
+      if (state.hasResponder) activeResponders++;
+    }
+    return (
+      registeredContracts: _respRegistry._contracts.length,
+      registeredMethods: _respRegistry._methods.length,
+      isListening: _respIsListening,
+      isDraining: _respIsDraining,
+      openStreams: _respStreams.length,
+      preMethodBufferedBytes: _respPreMethodBytes,
+      metadataStreams: metadataStreams,
+      bufferedMessages: bufferedMessages,
+      preBindBuffers: preBindBuffers,
+      activeResponders: activeResponders,
+      contractKeys: List<String>.unmodifiable(_respRegistry._contracts.keys),
+    );
+  }
 
   /// The [RpcRetryInfo] a capacity refusal carries, so a caller's retry policy
   /// can tell it from a size refusal with the same status.

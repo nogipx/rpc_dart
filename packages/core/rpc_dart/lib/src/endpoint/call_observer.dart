@@ -164,17 +164,18 @@ abstract class RpcCallObserverInterceptor<S> extends IRpcInterceptor {
     if (!observes(call, type)) return next(call.context);
     final state = onCallStart(call, type);
     final clock = Stopwatch()..start();
+    final T response;
     try {
-      final response = await runCall(
+      response = await runCall(
         state,
         () => next(contextFor(state, call.context)),
       );
-      onCallEnd(state, const RpcCallSucceeded(), clock.elapsed);
-      return response;
     } catch (error, stackTrace) {
       onCallEnd(state, _outcomeOf(error, stackTrace), clock.elapsed);
       rethrow;
     }
+    onCallEnd(state, const RpcCallSucceeded(), clock.elapsed);
+    return response;
   }
 
   Future<Stream<T>> _observeStream<T>(
