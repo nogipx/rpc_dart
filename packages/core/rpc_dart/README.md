@@ -203,11 +203,47 @@ RpcCallerEndpoint connect(Future<IRpcTransport> Function() open) {
   final connection = RpcClientConnection(
     transportFactory: (_) => open(),
     backoff: const RpcExponentialBackoff(maxDelay: Duration(seconds: 30)),
+    reconnectPolicy: const RpcReconnectPolicy(),
   );
   connection.connect(); // returns void; watch connection.state
   return RpcCallerEndpoint(transport: connection.transport);
 }
 ```
+
+`RpcReconnectPolicy` is opt-in. It retries UNAVAILABLE and capacity refusals
+carrying `RpcRetryInfo`, stops on other RPC statuses, and waits at least the
+backoff and any positive server retry delay. Without it, the connection keeps
+the existing retry-all behavior. An explicit `shouldReconnect` callback
+overrides the policy's decision. `stableAfter` defaults to 5 seconds.
+
+The connection also has transport-independent maintenance, without Flutter:
+
+```dart
+Future<void> maintain(RpcClientConnection connection) async {
+  await connection.suspend(); // keep the transport and active calls
+  await connection.resume(); // RPC ping; replace a silent peer immediately
+  final snapshot = connection.metrics;
+  print('${snapshot.successfulConnections} connections; ${snapshot.lastRoundTrip} RTT');
+}
+```
+
+`suspend(disconnect: true)` closes the current transport. A pending open is
+cancelled on either kind of suspension. `resume()` completes after checking
+the peer or making a replacement Online. A local capacity refusal leaves the
+transport in place. It does not undo a manual
+`disconnect()`, `dispose()` or a terminal reconnect decision. Use `connect()`
+to explicitly restart after a refusal. A suspended live connection stays Online;
+`isSuspended` reports the maintenance pause. Without a live transport its state
+is `RpcClientSuspended`.
+
+`ping()` performs an RPC liveness check. Set `pingInterval` to enable periodic
+checks; it is off by default. `pingTimeout` defaults to 10 seconds. Suspension
+stops this connection's heartbeat, while transport-owned keepalives remain
+independent. Avoid enabling both if suspension must pause all probes.
+
+`metrics` is an immutable snapshot of connection attempts, successes, failed
+attempts, drops, the current backoff, last failure, connection time and probe
+RTT. It does not add per-message instrumentation or count payload/wire bytes.
 
 ### Rate limiter
 

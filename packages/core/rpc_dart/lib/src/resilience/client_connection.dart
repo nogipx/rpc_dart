@@ -54,6 +54,15 @@ final class RpcClientDisconnected extends RpcClientConnectionState {
   final Object? reason;
 }
 
+/// Reconnects are suspended and no live transport is attached.
+///
+/// Suspending a live connection keeps its Online state; inspect
+/// [RpcClientConnection.isSuspended] to distinguish that case.
+final class RpcClientSuspended extends RpcClientConnectionState {
+  /// Creates a suspended state.
+  const RpcClientSuspended();
+}
+
 // ---------------------------------------------------------------------------
 // Proxy transport (internal)
 // ---------------------------------------------------------------------------
@@ -285,7 +294,12 @@ final class _ReconnectingTransportProxy
   Future<void> detach() async {
     // forceReconnect() runs detach() and then reconnects, so this is the path
     // the watermark is most often collected on.
-    _noteIdWatermark(_inner);
+    final previous = _inner;
+    final subscription = _innerSub;
+    _noteIdWatermark(previous);
+    _inner = null;
+    _innerSub = null;
+    _abandonPeerStreams();
     // BOTH steps are guarded, and this method owns both. `incomingMessages`
     // belongs to a transport the FACTORY built, so its onCancel is user code;
     // a throw there rejects detach() before the close runs, leaving the
@@ -294,14 +308,11 @@ final class _ReconnectingTransportProxy
     // onError, and in an application that zone is the ROOT one, which ends the
     // isolate -- and dispose() throws, leaving `_msgCtl` open.
     try {
-      await _innerSub?.cancel();
+      await subscription?.cancel();
     } catch (_) {}
-    _innerSub = null;
-    _abandonPeerStreams();
     try {
-      await _inner?.close();
+      await previous?.close();
     } catch (_) {}
-    _inner = null;
   }
 
   /// Whether [RpcClientConnection]'s connect loop is running right now.
@@ -310,10 +321,8 @@ final class _ReconnectingTransportProxy
   /// loop that gave up or never ran — and they want opposite advice from a
   /// caller. See [RpcNoConnectionException].
   ///
-  /// A callback rather than a flag this class maintains, deliberately: the
-  /// connect loop already has the answer in `_connectingGuard` and has SEVEN
-  /// exits, so a second copy would be seven chances to leave a caller retrying
-  /// into a loop that gave up.
+  /// Reads the connection's own loop flag so the proxy does not maintain a
+  /// second copy of the reconnect state.
   bool Function()? isReconnecting;
 
   IRpcTransport _require() {
@@ -596,6 +605,16 @@ class RpcClientConnection {
   /// example below -- keeps the connection in [RpcClientConnecting] for good,
   /// because nothing else ends that wait.
   ///
+  /// [reconnectPolicy] is opt-in: null retains retrying all failures. A supplied
+  /// [shouldReconnect] overrides its decision. The policy can also extend
+  /// [backoff] with server pushback. [stableAfter] is how long an attached
+  /// transport must last before a drop resets its attempt counter.
+  ///
+  /// [pingInterval] enables this connection's RPC heartbeat; null sends no
+  /// automatic probes. [pingTimeout] bounds manual, heartbeat and resume probes,
+  /// including their send. Leave transport-specific keepalives off when this
+  /// connection should own all maintenance, including [suspend].
+  ///
   /// ```dart
   /// final connection = RpcClientConnection(
   ///   transportFactory: (cancellation) => RpcWebSocketCallerTransport.connect(
@@ -609,28 +628,48 @@ class RpcClientConnection {
     transportFactory,
     RpcBackoffPolicy backoff = const RpcExponentialBackoff(),
     bool Function(Object? error)? shouldReconnect,
+    RpcReconnectPolicy? reconnectPolicy,
     int? maxAttempts,
     Duration? connectTimeout = const Duration(seconds: 30),
+    Duration stableAfter = const Duration(seconds: 5),
+    Duration? pingInterval,
+    Duration pingTimeout = const Duration(seconds: 10),
     LogScope? logger,
     void Function(RpcClientConnectionState state)? onStateChanged,
   }) : _factory = transportFactory,
        _backoff = backoff,
        _shouldReconnect = shouldReconnect,
+       _reconnectPolicy = reconnectPolicy,
        _maxAttempts = maxAttempts,
        _connectTimeout = connectTimeout,
+       _stableAfter = stableAfter,
+       _pingInterval = pingInterval,
+       _pingTimeout = pingTimeout,
        _log = logger ?? LogScope.noop,
        _onStateChanged = onStateChanged {
+    if (stableAfter < Duration.zero) {
+      throw ArgumentError.value(stableAfter, 'stableAfter', 'Must be >= zero');
+    }
+    if (pingInterval != null && pingInterval <= Duration.zero) {
+      throw ArgumentError.value(pingInterval, 'pingInterval', 'Must be > zero');
+    }
+    if (pingTimeout <= Duration.zero) {
+      throw ArgumentError.value(pingTimeout, 'pingTimeout', 'Must be > zero');
+    }
     _proxy.onDropped = _onTransportDropped;
     _proxy.nextAttempt = _awaitNextAttempt;
-    _proxy.isReconnecting = () =>
-        _connectingGuard != null && !_connectingGuard!.isCompleted;
+    _proxy.isReconnecting = () => !_isStopped && !_suspended && _connecting;
   }
 
   final Future<IRpcTransport> Function(RpcCancellationToken) _factory;
   final RpcBackoffPolicy _backoff;
   final bool Function(Object? error)? _shouldReconnect;
+  final RpcReconnectPolicy? _reconnectPolicy;
   final int? _maxAttempts;
   final Duration? _connectTimeout;
+  final Duration _stableAfter;
+  final Duration? _pingInterval;
+  final Duration _pingTimeout;
   final LogScope _log;
   final void Function(RpcClientConnectionState state)? _onStateChanged;
 
@@ -638,10 +677,24 @@ class RpcClientConnection {
   final _stateCtl = StreamController<RpcClientConnectionState>.broadcast();
 
   RpcClientConnectionState _state = const RpcClientIdle();
-  bool _isStopped = false;
+  bool _isStopped = true;
   bool _disposed = false;
-  Completer<void>? _connectingGuard;
+  bool _suspended = false;
+  bool _connecting = false;
   int _reconnectAttempts = 0;
+  int _connectAttempts = 0;
+  int _successfulConnections = 0;
+  int _failedAttempts = 0;
+  int _connectionDrops = 0;
+  DateTime? _openedAt;
+  Duration? _lastAttemptDuration;
+  Duration? _lastRoundTrip;
+  Object? _lastError;
+  Duration? _reconnectDelay;
+  Timer? _heartbeat;
+  RpcCancellationToken? _probeToken;
+  Future<RpcEndpointPingResult>? _probe;
+  Future<void>? _resuming;
 
   /// The token of the attempt in flight, null between attempts.
   RpcCancellationToken? _attempt;
@@ -653,21 +706,35 @@ class RpcClientConnection {
   static const String _stoppedReason = 'connection stopped';
   static const String _timedOutReason = 'connect timed out';
 
-  /// How long the live transport has been attached; see [_stableConnection].
+  /// How long the live transport has been attached.
   Stopwatch? _online;
-
-  /// How long a connection must last before its drop starts the attempt count
-  /// over. One that drops sooner was a failed attempt: a server that accepts
-  /// and then refuses (at capacity, or a balancer with no backend) otherwise
-  /// gets a reconnect at the base delay for ever, and [maxAttempts] is never
-  /// reached.
-  static const Duration _stableConnection = Duration(seconds: 5);
 
   /// Observable connection state stream.
   Stream<RpcClientConnectionState> get state => _stateCtl.stream;
 
   /// Current connection state (synchronous snapshot).
   RpcClientConnectionState get currentState => _state;
+
+  /// Whether automatic reconnects and this connection's heartbeat are paused.
+  bool get isSuspended => _suspended;
+
+  /// Lifetime counters without collecting or serializing per-message traffic.
+  RpcClientConnectionMetrics get metrics => RpcClientConnectionMetrics(
+    state: _state,
+    isConnected: _proxy._inner != null && !_proxy._inner!.isClosed,
+    isSuspended: _suspended,
+    isDisposed: _disposed,
+    connectAttempts: _connectAttempts,
+    successfulConnections: _successfulConnections,
+    failedAttempts: _failedAttempts,
+    connectionDrops: _connectionDrops,
+    reconnectAttempts: _reconnectAttempts,
+    openedAt: _openedAt,
+    lastAttemptDuration: _lastAttemptDuration,
+    lastRoundTrip: _lastRoundTrip,
+    lastError: _lastError,
+    reconnectDelay: _reconnectDelay,
+  );
 
   /// The proxy transport to pass to [RpcCallerEndpoint].
   ///
@@ -683,6 +750,8 @@ class RpcClientConnection {
   /// deliver anything — it would only sit connected and unreachable.
   void connect() {
     if (_disposed) return;
+    _suspended = false;
+    _stopMaintenance();
     _isStopped = false;
     _reconnectAttempts = 0;
     _connectWithBackoff();
@@ -695,7 +764,9 @@ class RpcClientConnection {
   /// connect loop is already running, or after [dispose].
   void forceReconnect() {
     if (_disposed) return;
-    if (_connectingGuard != null && !_connectingGuard!.isCompleted) {
+    _suspended = false;
+    _stopMaintenance();
+    if (_connecting) {
       // A loop disconnect() stopped but that has not exited yet -- asleep in
       // its backoff, or awaiting the factory -- would see the stop when it
       // woke and leave the connection idle for good. Resume it instead, as
@@ -708,8 +779,10 @@ class RpcClientConnection {
     }
     _isStopped = false;
     _reconnectAttempts = 0;
+    _openedAt = null;
+    _online = null;
     _proxy.detach().then((_) {
-      if (_isStopped) return; // disconnect() raced in during detach
+      if (_isStopped || _suspended) return;
       _emit(const RpcClientOffline());
       _connectWithBackoff();
     });
@@ -719,6 +792,10 @@ class RpcClientConnection {
   /// Does not dispose the connection — call [connect] to resume.
   Future<void> disconnect() async {
     _isStopped = true;
+    _suspended = false;
+    _stopMaintenance();
+    _openedAt = null;
+    _online = null;
     _attempt?.cancel(_stoppedReason);
     _wakeBackoff?.call();
     await _proxy.detach();
@@ -731,13 +808,241 @@ class RpcClientConnection {
   Future<void> dispose() async {
     _isStopped = true;
     _disposed = true;
+    _suspended = false;
+    _stopMaintenance();
+    _openedAt = null;
+    _online = null;
     _attempt?.cancel(_stoppedReason);
     _wakeBackoff?.call();
     await _proxy.close();
     if (!_stateCtl.isClosed) await _stateCtl.close();
   }
 
+  /// Pauses reconnects and this connection's optional RPC heartbeat.
+  ///
+  /// An attached transport and its RPC calls keep running unless [disconnect]
+  /// is true. Transport-owned keepalives are unaffected. A pending open is
+  /// cancelled; a peer drop during suspension is not retried until [resume].
+  Future<void> suspend({bool disconnect = false}) async {
+    if (_disposed) return;
+    _suspended = true;
+    _stopMaintenance();
+    _attempt?.cancel('connection suspended');
+    _wakeBackoff?.call();
+    if (disconnect) {
+      _openedAt = null;
+      _online = null;
+      await _proxy.detach();
+    }
+    if (_suspended && !_disposed && !_isStopped && _proxy._inner == null) {
+      _emit(const RpcClientSuspended());
+    }
+  }
+
+  /// Resumes maintenance and checks an attached peer with the RPC ping.
+  ///
+  /// A silent peer is replaced immediately; without a transport a fresh open
+  /// starts without backoff. Completes after the check or when a replacement
+  /// becomes Online. A local capacity refusal leaves the transport in place.
+  /// A manual stop, exhausted attempt limit or terminal policy
+  /// decision is not undone; use [connect] to explicitly restart.
+  Future<void> resume() {
+    if (_disposed) return Future<void>.value();
+    if (_isStopped) {
+      _suspended = false;
+      return Future<void>.value();
+    }
+    final pending = _resuming;
+    if (pending != null) return pending;
+    _suspended = false;
+    final future = _resume();
+    _resuming = future;
+    unawaited(
+      future
+          .whenComplete(() {
+            if (identical(_resuming, future)) _resuming = null;
+          })
+          .catchError((Object _) {}),
+    );
+    return future;
+  }
+
+  /// Sends an RPC liveness probe and records its round-trip time.
+  ///
+  /// Concurrent checks share a probe. The peer must run an RPC responder;
+  /// [IRpcTransport.health] alone does not establish remote liveness.
+  Future<RpcEndpointPingResult> ping() {
+    if (_disposed) {
+      return Future.error(RpcClosedException('RpcClientConnection'));
+    }
+    final pending = _probe;
+    if (pending != null) return pending;
+    final IRpcTransport inner;
+    try {
+      inner = _proxy._require();
+    } catch (error, stack) {
+      return Future.error(error, stack);
+    }
+    final token = RpcCancellationToken();
+    _probeToken = token;
+    final future = _ping(inner, token);
+    _probe = future;
+    unawaited(
+      future.then<void>((_) {}, onError: (Object _) {}).whenComplete(() {
+        if (identical(_probe, future)) {
+          _probe = null;
+          _probeToken = null;
+        }
+      }),
+    );
+    return future;
+  }
+
   // -- Internal --------------------------------------------------------------
+
+  void _stopMaintenance() {
+    _heartbeat?.cancel();
+    _heartbeat = null;
+    _probeToken?.cancel('connection maintenance stopped');
+    _probeToken = null;
+    _probe = null;
+    _resuming = null;
+  }
+
+  void _startHeartbeat() {
+    _heartbeat?.cancel();
+    _heartbeat = null;
+    final interval = _pingInterval;
+    if (interval == null || _isStopped || _suspended || _disposed) return;
+    _heartbeat = RpcLongTimer.create(interval, () async {
+      if (_probe == null && _resuming == null) await _checkHeartbeat();
+      if (_proxy._inner != null) _startHeartbeat();
+    });
+  }
+
+  Future<RpcEndpointPingResult> _ping(
+    IRpcTransport inner,
+    RpcCancellationToken token,
+  ) async {
+    final id = inner.createStream();
+    try {
+      final result =
+          await RpcEndpointPingExchange(
+            transport: inner,
+            streamId: id,
+            sentAt: DateTime.timestamp(),
+            logger: _log,
+          ).execute(
+            metadata: RpcMetadata.forClientRequest(
+              RpcEndpointPingProtocol.serviceName,
+              RpcEndpointPingProtocol.methodName,
+            ),
+            timeout: _pingTimeout,
+            cancellationToken: token,
+          );
+      if (identical(_proxy._inner, inner) && !token.isCancelled) {
+        _lastRoundTrip = result.roundTrip;
+      }
+      return result;
+    } catch (error) {
+      if (identical(_proxy._inner, inner) && !token.isCancelled) {
+        _lastError = error;
+      }
+      rethrow;
+    } finally {
+      // Release on the transport that minted the id, even if it was replaced.
+      inner.releaseStreamId(id);
+    }
+  }
+
+  Future<void> _checkHeartbeat() async {
+    final inner = _proxy._inner;
+    if (inner == null || _isStopped || _suspended || _disposed) return;
+    try {
+      await ping();
+    } catch (error) {
+      if (error is RpcCancelledException) return;
+      if (!identical(_proxy._inner, inner) ||
+          _isStopped ||
+          _suspended ||
+          _disposed) {
+        return;
+      }
+      _lastError = error;
+      // A status reply or a local capacity limit is not evidence of silence.
+      if (error is TimeoutException || inner.isClosed) {
+        _proxy._retire(inner);
+        _onTransportDropped(error);
+      }
+    }
+  }
+
+  Future<void> _resume() async {
+    final inner = _proxy._inner;
+    if (inner != null && !inner.isClosed) {
+      try {
+        await ping();
+      } catch (error) {
+        if (error is RpcCancelledException) rethrow;
+        if (_isStopped || _suspended || _disposed) rethrow;
+        if (identical(_proxy._inner, inner)) {
+          _lastError = error;
+          if (error is! TimeoutException && !inner.isClosed) {
+            if (error is! RpcStatusException) rethrow;
+            // A peer that answered is alive, even if it refused the probe.
+            _startHeartbeat();
+            return;
+          }
+          final online = _waitForOnline();
+          _proxy._retire(inner);
+          _onTransportDropped(error);
+          _wakeBackoff?.call();
+          await online;
+          return;
+        }
+        if (_proxy._inner != null && _state is RpcClientOnline) return;
+      }
+      if (_isStopped || _suspended || _disposed) {
+        throw RpcCancelledException('Connection resume cancelled');
+      }
+      if (identical(_proxy._inner, inner)) {
+        _startHeartbeat();
+        return;
+      }
+    }
+    final online = _waitForOnline();
+    _reconnectAttempts = 0;
+    _wakeBackoff?.call();
+    unawaited(_connectWithBackoff());
+    await online;
+  }
+
+  Future<void> _waitForOnline() async {
+    try {
+      final state = await _stateCtl.stream.firstWhere(
+        (s) =>
+            s is RpcClientOnline ||
+            s is RpcClientIdle ||
+            s is RpcClientDisconnected ||
+            s is RpcClientSuspended,
+      );
+      if (state is RpcClientOnline &&
+          !_isStopped &&
+          !_suspended &&
+          !_disposed) {
+        return;
+      }
+      if (state is RpcClientDisconnected) {
+        throw RpcNoConnectionException(
+          'RpcClientConnection',
+          reconnecting: false,
+        );
+      }
+      throw RpcCancelledException('Connection resume cancelled');
+    } on StateError {
+      throw RpcClosedException('RpcClientConnection');
+    }
+  }
 
   /// The longest [_awaitNextAttempt] waits. The connection's backoff can sleep
   /// up to its `maxDelay`, a minute by default, and a retry waiting on it would
@@ -766,6 +1071,7 @@ class RpcClientConnection {
     final now = _state;
     if (now is RpcClientOnline ||
         now is RpcClientDisconnected ||
+        now is RpcClientSuspended ||
         now is RpcClientIdle) {
       return status(now);
     }
@@ -778,6 +1084,7 @@ class RpcClientConnection {
             (s) =>
                 s is RpcClientOnline ||
                 s is RpcClientDisconnected ||
+                s is RpcClientSuspended ||
                 s is RpcClientIdle ||
                 (s is RpcClientConnecting && s.attempt >= failedPast),
           )
@@ -797,15 +1104,27 @@ class RpcClientConnection {
 
   void _onTransportDropped(Object? error) {
     if (_isStopped) return;
+    _connectionDrops++;
+    if (error != null) _lastError = error;
+    _openedAt = null;
+    _stopMaintenance();
     _log.warning('Transport dropped', error: error);
     if (!_canReconnect(error)) {
       _log.info('Will not reconnect (shouldReconnect returned false)');
+      _isStopped = true;
+      _attempt?.cancel(_stoppedReason);
+      _wakeBackoff?.call();
       _emit(RpcClientDisconnected(reason: error));
+      return;
+    }
+    if (_suspended) {
+      _online = null;
+      _emit(const RpcClientSuspended());
       return;
     }
     final online = _online;
     _online = null;
-    if (online != null && online.elapsed >= _stableConnection) {
+    if (online != null && online.elapsed >= _stableAfter) {
       _reconnectAttempts = 0;
     }
     _reconnectAttempts++;
@@ -814,32 +1133,45 @@ class RpcClientConnection {
     // building a replacement and is left to finish. Clearing the guard here
     // started a second loop beside it: two transports built, the first
     // retired on arrival, and Online reported twice.
-    _connectWithBackoff();
+    _connectWithBackoff(cause: error);
   }
 
-  Future<void> _connectWithBackoff() async {
+  Future<void> _connectWithBackoff({Object? cause}) async {
     // Guard against concurrent connect loops.
-    if (_connectingGuard != null && !_connectingGuard!.isCompleted) return;
-    final guard = Completer<void>();
-    _connectingGuard = guard;
+    if (_connecting) return;
+    _connecting = true;
 
-    while (!_isStopped) {
+    while (!_isStopped && !_suspended) {
       // Check max attempts.
       if (_maxAttempts != null && _reconnectAttempts >= _maxAttempts) {
         _log.error('Max reconnect attempts ($_maxAttempts) exceeded');
+        _isStopped = true;
+        _connecting = false;
         _emit(
           const RpcClientDisconnected(
             reason: 'max reconnect attempts exceeded',
           ),
         );
-        guard.complete();
         return;
       }
 
       // Emit Connecting and wait for backoff delay (except first attempt).
       _emit(RpcClientConnecting(attempt: _reconnectAttempts + 1));
+      if (_isStopped || _suspended) break;
       if (_reconnectAttempts > 0) {
-        final delay = _backoff.delayFor(_reconnectAttempts - 1);
+        final Duration delay;
+        try {
+          final backoff = _backoff.delayFor(_reconnectAttempts - 1);
+          delay =
+              _reconnectPolicy?.delayFor(cause, backoff: backoff) ?? backoff;
+        } catch (error) {
+          _lastError = error;
+          _isStopped = true;
+          _connecting = false;
+          _emit(RpcClientDisconnected(reason: error));
+          return;
+        }
+        _reconnectDelay = delay;
         _log.info(
           'Reconnect attempt ${_reconnectAttempts + 1}, '
           'waiting ${delay.inMilliseconds}ms',
@@ -848,14 +1180,15 @@ class RpcClientConnection {
         // the isolate alive, so dispose() during the sleep held the process
         // open for the rest of the delay -- up to maxDelay.
         final wake = Completer<void>();
-        final sleep = Timer(delay, wake.complete);
+        final sleep = RpcLongTimer.create(delay, wake.complete);
         _wakeBackoff = () {
           sleep.cancel();
           if (!wake.isCompleted) wake.complete();
         };
         await wake.future;
         _wakeBackoff = null;
-        if (_isStopped) break;
+        _reconnectDelay = null;
+        if (_isStopped || _suspended) break;
       }
 
       // One token per attempt, cancelled by a stop or by connectTimeout, which
@@ -864,11 +1197,14 @@ class RpcClientConnection {
       // ends the wait even for a factory that ignores it.
       final attempt = RpcCancellationToken();
       _attempt = attempt;
+      final attemptClock = Stopwatch()..start();
       final connectTimeout = _connectTimeout;
       final deadline = connectTimeout == null
           ? null
           : Timer(connectTimeout, () => attempt.cancel(_timedOutReason));
       try {
+        if (_isStopped || _suspended) break;
+        _connectAttempts++;
         final factoryFuture = _factory(attempt);
         var delivered = false;
         final IRpcTransport inner = await Future.any([
@@ -897,10 +1233,10 @@ class RpcClientConnection {
         //
         // The transport is ours from the moment the factory returns it, so
         // abandoning it means closing it.
-        if (_isStopped || _proxy.isClosed) {
+        if (_isStopped || _suspended || _proxy.isClosed) {
           _log.info('Discarding transport: connection stopped');
           unawaited(inner.close().catchError((_) {}));
-          guard.complete();
+          _connecting = false;
           return;
         }
 
@@ -914,8 +1250,12 @@ class RpcClientConnection {
             'lastIssuedStreamId and resumeStreamIdsAfter',
           );
           _log.error('Transport refused', error: error);
+          _lastError = error;
+          _failedAttempts++;
+          _lastAttemptDuration = attemptClock.elapsed;
+          _isStopped = true;
+          _connecting = false;
           _emit(RpcClientDisconnected(reason: error));
-          guard.complete();
           return;
         }
 
@@ -931,36 +1271,45 @@ class RpcClientConnection {
           unawaited(inner.close().catchError((_) {}));
           rethrow;
         }
-        if (_isStopped || _proxy.isClosed) {
+        if (_isStopped || _suspended || _proxy.isClosed) {
           _log.info('Discarding transport: connection stopped');
           unawaited(inner.close().catchError((_) {}));
-          guard.complete();
+          _connecting = false;
           return;
         }
 
         _proxy.attach(inner);
         _log.info('Connected (attempt ${_reconnectAttempts + 1})');
         // The count starts over when this connection drops after holding up,
-        // not here; see [_stableConnection].
+        // not here; see [_stableAfter].
         _online = Stopwatch()..start();
+        _openedAt = DateTime.now().toUtc();
+        _successfulConnections++;
+        _lastAttemptDuration = attemptClock.elapsed;
+        _startHeartbeat();
         _emit(const RpcClientOnline());
-        guard.complete();
+        _connecting = false;
         return;
       } on _AttemptStopped {
         // A stop gave this attempt up; it did not fail, so it is neither
         // counted nor shown to shouldReconnect. Still stopped: leave. A
         // connect() or forceReconnect() since then: start a fresh attempt.
-        if (_isStopped) {
+        if (_isStopped || _suspended) {
           _log.info('Attempt given up: connection stopped');
-          guard.complete();
+          _connecting = false;
           return;
         }
       } catch (e) {
+        _failedAttempts++;
+        _lastAttemptDuration = attemptClock.elapsed;
+        _lastError = e;
+        cause = e;
         _log.warning('Attempt ${_reconnectAttempts + 1} failed', error: e);
         if (!_canReconnect(e)) {
           _log.info('Will not reconnect (shouldReconnect returned false)');
+          _isStopped = true;
+          _connecting = false;
           _emit(RpcClientDisconnected(reason: e));
-          guard.complete();
           return;
         }
         _reconnectAttempts++;
@@ -970,7 +1319,7 @@ class RpcClientConnection {
       }
     }
 
-    guard.complete();
+    _connecting = false;
   }
 
   /// What a given-up [attempt] fails with: a [TimeoutException] past
@@ -980,7 +1329,16 @@ class RpcClientConnection {
       ? TimeoutException('Connect timed out', _connectTimeout)
       : const _AttemptStopped();
 
-  bool _canReconnect(Object? error) => _shouldReconnect?.call(error) ?? true;
+  bool _canReconnect(Object? error) {
+    try {
+      return _shouldReconnect?.call(error) ??
+          _reconnectPolicy?.shouldReconnect(error) ??
+          true;
+    } catch (failure) {
+      _lastError = failure;
+      return false;
+    }
+  }
 
   /// Closes whatever [pending] eventually produces.
   ///

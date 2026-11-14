@@ -235,6 +235,7 @@ RpcCallerEndpoint connectWithRetry(Future<IRpcTransport> Function() open) {
   final connection = RpcClientConnection(
     transportFactory: (_) => open(),
     backoff: const RpcExponentialBackoff(maxDelay: Duration(seconds: 30)),
+    reconnectPolicy: const RpcReconnectPolicy(),
     maxAttempts: 10,
     connectTimeout: const Duration(seconds: 5),
     shouldReconnect: (error) => true,
@@ -244,6 +245,7 @@ RpcCallerEndpoint connectWithRetry(Future<IRpcTransport> Function() open) {
       RpcClientOffline() => print('dropped, reconnecting'),
       RpcClientDisconnected(:final reason) => print('gave up: $reason'),
       RpcClientIdle() => print('idle'),
+      RpcClientSuspended() => print('suspended without a live transport'),
     },
   );
   connection.connect(); // returns void; watch `state` / `currentState`
@@ -274,18 +276,73 @@ RpcCallerEndpoint connectWithRetry(Future<IRpcTransport> Function() open) {
 - `logger:` takes a `LogScope` (e.g. `controller.scope('app.connection')`) and receives drops, attempts and
   give-ups at info, warning and error.
 - When the state is `RpcClientDisconnected(reason)`, the connection has stopped trying. Call `connect()` to start again.
-- A connection that drops within 5 s of coming online counts as a failed attempt, so `maxAttempts` and the backoff
+- A connection that drops within `stableAfter` (5 s by default) of coming online counts as a failed attempt, so `maxAttempts` and the backoff
   still apply to a server that accepts and then refuses. One that held up longer starts the count over.
 - `RpcRetryInterceptor` on an endpoint over `connection.transport` waits, up to 5 s, for the outcome of the
   connection's next attempt and starts nothing itself. So it retries after a real connect, not in the backoff's
   gap, and the connection keeps its own backoff however many calls are retrying.
 - Calls that are in flight during a drop are lost. Issue them again.
 
+### Reconnect policy and connection metrics
+
+- `reconnectPolicy: const RpcReconnectPolicy()` opts into status-aware reconnects:
+  UNAVAILABLE retries, RESOURCE_EXHAUSTED retries only with pushback, and other RPC statuses stop.
+  Ordinary peer closes and failures without an RPC status retry. Without a policy, all failures
+  retain the existing retry behavior. `shouldReconnect` overrides the policy's decision.
+- The policy waits at least the configured backoff and every positive `RpcRetryInfo.retryDelay`.
+  Zero pushback keeps the backoff. Extend `RpcReconnectPolicy` to override `shouldReconnect(error)`
+  or `delayFor(error, backoff:)`; the connection remains the only reconnect loop.
+- `connection.metrics` returns an immutable `RpcClientConnectionMetrics`: lifetime `connectAttempts`,
+  `successfulConnections`, `failedAttempts`, `connectionDrops`, `reconnectAttempts`, `state`,
+  `isConnected`, `isSuspended`, `isDisposed`, `openedAt`, `lastAttemptDuration`, `lastRoundTrip`,
+  `lastError` and the selected `reconnectDelay` while waiting. No per-message byte accounting.
+  `isConnected` means a transport is attached, not proof that the remote application is alive.
+  `reconnectAttempts` is the backoff/attempt-limit counter, including short-lived drops;
+  a successful open retains it until a stable connection drops or the application restarts it.
+
+### Suspend, resume and RPC heartbeat
+
+```dart
+import 'package:rpc_dart/rpc_dart.dart';
+
+RpcClientConnection supervised(Future<IRpcTransport> Function() open) =>
+    RpcClientConnection(
+      transportFactory: (_) => open(),
+      reconnectPolicy: const RpcReconnectPolicy(),
+      pingInterval: const Duration(seconds: 30),
+      pingTimeout: const Duration(seconds: 10),
+    );
+
+Future<void> resumeConnection(RpcClientConnection connection) async {
+  await connection.suspend();
+  await connection.resume();
+  print(connection.metrics.lastRoundTrip);
+}
+```
+
+- No Flutter dependency. The application decides when to call these methods.
+- `suspend()` stops reconnects, cancels a pending open and stops the connection's own heartbeat.
+  A live transport and active RPCs remain usable. `suspend(disconnect: true)` closes it instead.
+  A peer drop during suspension is observed but does not start another attempt.
+- A suspended live connection stays `RpcClientOnline`; use `isSuspended` to identify the pause.
+  Without a live transport it reports `RpcClientSuspended`.
+- `resume()` checks an attached peer with the existing RPC ping. A timeout replaces that transport
+  without waiting for backoff; a status reply or local capacity refusal does not establish a dead
+  path. With no live transport it opens a fresh one immediately. The future completes after the
+  check or when a replacement becomes Online. Another suspension or stop cancels the wait.
+- `resume()` does not restart a connection stopped by `disconnect()`, `dispose()`, a terminal policy
+  decision or the attempt limit, or one that was never started. Use `connect()` to explicitly restart.
+- `ping()` is a manual RPC probe, shared between concurrent checks. `pingTimeout` bounds its send
+  and response. The peer must have a running RPC responder. A successful probe updates `lastRoundTrip`.
+- `pingInterval` is null by default. Setting it enables periodic RPC probes; only silence or a
+  closed transport triggers replacement. Transport-owned keepalives remain independent; leave
+  them off when `suspend()` should pause every probe.
+
 ## Pitfalls
 
 - These do NOT exist: `RpcException(code:, message:, details:)`, `e.code`,
   `RpcTimeoutException`, `RpcTransportException`, `StatusCode`,
-  `RpcBackoffPolicy.exponential(...)`, `RpcClientConnection(reconnectPolicy:)`,
+  `RpcBackoffPolicy.exponential(...)`,
   `RpcRateLimitInterceptor(maxRequests:, window:)`.
 - `on RpcCancelledException` does not catch a CANCELLED status sent by the server. Check
   `e.statusCode == RpcStatus.cancelled`.

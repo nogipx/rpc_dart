@@ -2,35 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
-// Guards RpcClientConnection against the defect family that produced two real
-// bugs in the transports it wraps:
-//
-//   473789b9  websocket caller: two concurrent reconnect() calls each opened a
-//             socket and the second assignment won, orphaning the first
-//   75fd517f  http2 caller: identical, one orphan per extra attempt
-//
-// RpcClientConnection is the transport-agnostic supervisor -- the thing most
-// likely to be driven concurrently -- so a leak here would affect every
-// transport. It is CORRECT today: `_connectingGuard` refuses a second connect
-// loop, and the loop completes that guard synchronously right after attach, so
-// there is no window in which a drop could start an overlapping loop.
-//
-// But nothing tested it. The existing forceReconnect() tests check behaviour
-// (it drops and reconnects, it resumes after disconnect, it resets the attempt
-// counter) and none of them drive it concurrently or count transports. Since
-// `_onTransportDropped` sets `_connectingGuard = null` on purpose -- deliberately
-// bypassing the guard -- the safety rests on timing that a refactor could
-// easily disturb.
-//
-// Measured before writing this, to confirm there was nothing to fix:
-//
-//   control, connect + dispose      : created=1 closed=1 orphans=0
-//   4x concurrent forceReconnect    : created=2 closed=2 orphans=0
-//   a drop racing forceReconnect    : created=2 closed=2 orphans=0
-//   repeated peer drops             : created=3 closed=3 orphans=0
-//
-// The assertion is "every transport the factory produced was closed", which is
-// what the sibling bugs violated.
+// Concurrent reconnect requests and peer drops must leave no transports open
+// after the connection is disposed.
 
 import 'dart:async';
 
@@ -176,8 +149,7 @@ void main() {
   }, timeout: const Timeout(Duration(seconds: 60)));
 
   test('a peer drop racing forceReconnect() does not orphan', () async {
-    // _onTransportDropped clears _connectingGuard on purpose, so this is the
-    // path where an overlapping loop would be created if one could be.
+    // A peer drop and explicit reconnect requests must share the active loop.
     final orphans = await orphansAfter((c) async {
       final current = produced.isNotEmpty ? produced.last : null;
       c.forceReconnect();
