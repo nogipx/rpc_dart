@@ -4,6 +4,12 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.4.1
+
+- Measure a buffered record's byte charge once and retain it through sends and
+  reconnects. Acknowledgement and eviction no longer rewalk the payload or
+  corrupt byte accounting when nested log data changes.
+
 ## 0.4.0
 
 - Record buffers are bounded in bytes as well as records.
