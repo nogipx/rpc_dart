@@ -155,6 +155,7 @@ and a pitfalls list.
 | --- | --- |
 | Define a service from an annotated interface with `rpc_dart_generator` (recommended); transfer modes, peer services, versioning | [code-generation.md](references/code-generation.md) |
 | Hand-written contracts; endpoints; peer mode; interceptors; annotation reference | [contracts-and-endpoints.md](references/contracts-and-endpoints.md) |
+| Infrastructure primitives for library integrations (`internal.dart`) | [internal-streams.md](references/internal-streams.md) |
 | Server, client and bidirectional streams; cancellation; backpressure | [streaming.md](references/streaming.md) |
 | Serialization (`IRpcSerializable`, `RpcCodec`, `RpcBinaryCodec`, primitives), transfer modes, compression | [codecs-and-compression.md](references/codecs-and-compression.md) |
 | Deadlines, cancellation, headers and metadata rules, per-call scope | [context-and-metadata.md](references/context-and-metadata.md) |

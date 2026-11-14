@@ -560,3 +560,10 @@ This package is the core of the rpc_dart ecosystem. Additional packages are avai
 | [rpc_dart_wasm](https://pub.dev/packages/rpc_dart_wasm) | WebAssembly bridge transport |
 
 For the full list visit the [GitHub repository](https://github.com/nogipx/rpc_dart).
+
+### Integration infrastructure
+
+Library integrations can import `package:rpc_dart/internal.dart` for the selected
+stream subscription owners, bounded queues, buffer accounting and peer codec
+refusals. These helpers share the mechanisms used by RPC; they do not encode
+payloads or manage transport credits. See [the integration contract](skills/rpc_dart-core/references/internal-streams.md).

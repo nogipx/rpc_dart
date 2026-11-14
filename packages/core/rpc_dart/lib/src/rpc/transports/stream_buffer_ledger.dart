@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+import '../../core/buffer_budget.dart';
+
 /// What [RpcStreamBufferLedger.admit] decided about one message.
 enum RpcBufferAdmission {
   /// Charged; the message may be queued.
@@ -67,8 +69,10 @@ final class RpcStreamBufferLedger {
   /// and a queue depth needs nothing invented.
   final int limitEvents;
 
-  final Map<int, int> _held = {};
-  final Map<int, int> _events = {};
+  final Map<int, RpcBufferBudget> _queues = {};
+  // A drained queue can recur for every message of an otherwise idle stream.
+  // Reuse one empty account without retaining finished stream identifiers.
+  RpcBufferBudget? _idleBudget;
   final Set<int> _failed = {};
 
   /// Charges [bytes] and [events] messages against [streamId].
@@ -79,19 +83,22 @@ final class RpcStreamBufferLedger {
   /// not count it either; its bytes still bound it.
   RpcBufferAdmission admit(int streamId, int bytes, {int events = 1}) {
     if (_failed.contains(streamId)) return RpcBufferAdmission.refused;
-    final next = (_held[streamId] ?? 0) + bytes;
-    final nextEvents = (_events[streamId] ?? 0) + events;
-    if (next > limitBytes || nextEvents > limitEvents) {
+    final budget =
+        _queues[streamId] ??
+        _idleBudget ??
+        RpcBufferBudget(limitBytes: limitBytes, limitEvents: limitEvents);
+    if (!budget.admit(bytes, events: events)) {
       _failed.add(streamId);
       return RpcBufferAdmission.overflowed;
     }
     final totalLimit = limitTotalBytes;
     if (totalLimit != null && _total + bytes > totalLimit) {
+      budget.release(bytes, events: events);
       _failed.add(streamId);
       return RpcBufferAdmission.overflowedConnection;
     }
-    _held[streamId] = next;
-    if (nextEvents > 0) _events[streamId] = nextEvents;
+    if (identical(budget, _idleBudget)) _idleBudget = null;
+    _queues[streamId] = budget;
     _total += bytes;
     return RpcBufferAdmission.admitted;
   }
@@ -116,51 +123,46 @@ final class RpcStreamBufferLedger {
   /// The EVENT count is released even for a message that carried no bytes, or a
   /// zero-copy stream would be admitted `limitEvents` times and never again.
   void release(int streamId, int bytes, {int events = 1}) {
-    final queued = _events[streamId];
-    if (queued != null && events > 0) {
-      if (queued <= events) {
-        _events.remove(streamId);
-      } else {
-        _events[streamId] = queued - events;
-      }
-    }
-    final held = _held[streamId];
-    if (held == null) return;
-    final left = held - bytes;
-    if (left <= 0) {
-      _held.remove(streamId);
-      _total -= held;
-    } else {
-      _held[streamId] = left;
-      _total -= bytes;
+    final budget = _queues[streamId];
+    if (budget == null) return;
+    final held = budget.bytes;
+    budget.release(bytes, events: events);
+    _total -= held - budget.bytes;
+    if (budget.bytes == 0 && budget.events == 0) {
+      _queues.remove(streamId);
+      _idleBudget ??= budget;
     }
   }
 
   /// Drops every trace of [streamId]; called when its call ends.
   void forget(int streamId) {
-    _total -= _held.remove(streamId) ?? 0;
-    _events.remove(streamId);
+    final budget = _queues.remove(streamId);
+    if (budget != null) {
+      _total -= budget.bytes;
+      budget.clear();
+      _idleBudget ??= budget;
+    }
     _failed.remove(streamId);
   }
 
   /// Drops every stream's state.
   void clear() {
-    _held.clear();
-    _events.clear();
+    _queues.clear();
+    _idleBudget = null;
     _failed.clear();
     _total = 0;
   }
 
   /// Bytes currently charged to [streamId], for diagnostics and tests.
-  int heldFor(int streamId) => _held[streamId] ?? 0;
+  int heldFor(int streamId) => _queues[streamId]?.bytes ?? 0;
 
   /// Un-consumed messages currently charged to [streamId], for diagnostics and
   /// tests.
-  int eventsFor(int streamId) => _events[streamId] ?? 0;
+  int eventsFor(int streamId) => _queues[streamId]?.events ?? 0;
 
   /// How many streams hold a charge, for diagnostics and tests.
   ///
   /// Counts either dimension: a zero-copy stream holds events and no bytes, and
   /// reading `_held` alone reported it as tracking nothing.
-  int get trackedStreams => {..._held.keys, ..._events.keys}.length;
+  int get trackedStreams => _queues.length;
 }

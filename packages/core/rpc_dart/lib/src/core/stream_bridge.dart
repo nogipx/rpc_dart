@@ -4,130 +4,100 @@
 
 import 'dart:async';
 
-/// A [StreamController] mirroring a source this library does not own.
+import 'stream_source.dart';
+
+/// Mirrors a source while forwarding demand and owning both cancellation paths.
 ///
-/// The class is decided by ownership: a stream the library built cannot park on
-/// cancel, one handed in by a user — or built from a user's `async*` — can.
-/// Every bridge over such a source owes the same four clauses, and four
-/// consecutive rounds each found a different copy missing a different one.
-///
-/// A bridge has **two** cancel paths and both must drop the source's cancel
-/// Future:
-///
-/// - **consumer-cancel** — the downstream listener cancels. `StreamController`
-///   awaits whatever `onCancel` returns, so returning the source's cancel hands
-///   the consumer the source's own stall: measured as an unbounded hang against
-///   6 ms with the await removed.
-/// - **owner-teardown** — [cancelSource] / [close], called by the scope, timer
-///   or lifecycle that owns the bridge. Awaiting here blocks a shutdown.
-///
-/// The other two: forward pause/resume, or a slow consumer never slows the
-/// source and the controller buffers without bound; and close the controller
-/// when the source is done, or the consumer waits on a call that is over.
+/// This neutral relay preserves non-terminal source errors. It has no queue
+/// budget; use `BoundedStreamBridge` when a producer cannot be paused safely.
 final class StreamBridge<T> {
-  final Stream<T> _source;
-  final void Function()? _onSourceDone;
-  final void Function(Object error, StackTrace stackTrace)? _onSourceError;
-  final void Function()? _onConsumerCancel;
-  final void Function(Object error, StackTrace stackTrace)? _onCancelFailed;
-
-  late final StreamController<T> _controller;
-  StreamSubscription<T>? _subscription;
-
-  /// Bridges [source].
-  ///
-  /// [subscribeOnFirstListen] defers subscribing until someone listens, for a
-  /// bridge whose subscription STARTS something — a tracked call, a metered
-  /// stream. Eager (the default) is for a bridge whose source must be observed
-  /// whether or not the consumer ever arrives.
-  ///
-  /// The hooks run before the bridge's own handling: [onFirstListen] before
-  /// subscribing, [onConsumerCancel] before the source is cancelled,
-  /// [onSourceDone] before the controller closes. [onCancelFailed] receives a
-  /// cancel that rejected — without it the rejection is swallowed, with it the
-  /// owner can log; either way it never reaches the zone.
+  /// Mirrors [source]. Eager subscription is the default; a cold operation can
+  /// opt into [subscribeOnFirstListen]. Hooks run before forwarding the event.
   StreamBridge({
     required Stream<T> source,
     bool subscribeOnFirstListen = false,
     void Function()? onFirstListen,
     void Function()? onSourceDone,
-    void Function(Object error, StackTrace stackTrace)? onSourceError,
+    void Function(Object, StackTrace)? onSourceError,
     void Function()? onConsumerCancel,
-    void Function(Object error, StackTrace stackTrace)? onCancelFailed,
-  }) : _source = source,
+    void Function(Object, StackTrace)? onCancelFailed,
+  }) : _onFirstListen = onFirstListen,
        _onSourceDone = onSourceDone,
        _onSourceError = onSourceError,
-       _onConsumerCancel = onConsumerCancel,
-       _onCancelFailed = onCancelFailed {
+       _onConsumerCancel = onConsumerCancel {
     _controller = StreamController<T>(
       onListen: () {
-        onFirstListen?.call();
-        if (subscribeOnFirstListen) _subscribe();
+        if (_ended) return;
+        final first = _onFirstListen;
+        _onFirstListen = null;
+        first?.call();
+        if (!_ended && subscribeOnFirstListen) _input.start();
       },
-      onPause: () => _subscription?.pause(),
-      onResume: () => _subscription?.resume(),
-      // A block body, deliberately: an arrow would return cancelSource()'s
-      // value, and the day that stops being void the consumer starts awaiting
-      // the source again.
-      onCancel: () {
-        _onConsumerCancel?.call();
-        cancelSource();
-      },
+      onPause: () => _input.pause(),
+      onResume: () => _input.resume(),
+      onCancel: () => _finish(notify: false),
     );
-    if (!subscribeOnFirstListen) _subscribe();
+    _input = StreamSource<T>(
+      source: _factory(source),
+      onData: _controller.add,
+      onError: (error, stack) {
+        if (_ended) return;
+        _onSourceError?.call(error, stack);
+        if (!_ended) _controller.addError(error, stack);
+      },
+      onDone: () => _finish(sourceDone: true),
+      onCancelFailed: onCancelFailed,
+    );
+    if (!subscribeOnFirstListen) _input.start();
   }
+  static Stream<T> Function() _factory<T>(Stream<T> source) =>
+      () => source;
 
-  /// The mirrored stream, to hand to the consumer.
+  late final StreamSource<T> _input;
+  late final StreamController<T> _controller;
+  void Function()? _onFirstListen;
+  void Function()? _onSourceDone;
+  void Function(Object, StackTrace)? _onSourceError;
+  void Function()? _onConsumerCancel;
+  bool _ended = false;
+
+  /// The mirrored single-subscription stream.
   Stream<T> get stream => _controller.stream;
 
-  /// Whether the mirrored stream is closed.
-  bool get isClosed => _controller.isClosed;
+  /// Whether the relay has ended.
+  bool get isClosed => _ended;
 
-  /// Drops the source subscription without waiting for it.
-  ///
-  /// Nulls the handle first, so a later pause/resume cannot reach a cancelled
-  /// subscription and throw.
-  void cancelSource() {
-    final subscription = _subscription;
-    _subscription = null;
-    if (subscription == null) return;
-    unawaited(
-      subscription.cancel().catchError((Object error, StackTrace stackTrace) {
-        _onCancelFailed?.call(error, stackTrace);
-      }),
-    );
-  }
+  /// Stops the source without ending the output.
+  void cancelSource() => _input.cancel();
 
-  /// Owner teardown: drops the source and ends the mirrored stream.
-  void close() {
-    cancelSource();
-    if (!_controller.isClosed) unawaited(_controller.close());
-  }
+  /// Ends the relay, without waiting for arbitrary source cleanup.
+  void close() => _finish();
 
-  /// Owner teardown that says why: drops the source and ends the mirrored
-  /// stream with [error]. A consumer that listens later sees the failure; with
-  /// the source merely cancelled it would wait on a stream that never ends.
-  void fail(Object error, [StackTrace? stackTrace]) {
-    cancelSource();
-    if (_controller.isClosed) return;
-    _controller.addError(error, stackTrace);
-    unawaited(_controller.close());
-  }
+  /// Ends the relay with a terminal owner-supplied failure.
+  void fail(Object error, [StackTrace? stackTrace]) =>
+      _finish(error: error, stack: stackTrace);
 
-  void _subscribe() {
-    _subscription = _source.listen(
-      (event) {
-        if (!_controller.isClosed) _controller.add(event);
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        _onSourceError?.call(error, stackTrace);
-        if (!_controller.isClosed) _controller.addError(error, stackTrace);
-      },
-      onDone: () {
-        _onSourceDone?.call();
-        if (!_controller.isClosed) unawaited(_controller.close());
-      },
-      cancelOnError: false,
-    );
+  void _finish({
+    bool notify = true,
+    bool sourceDone = false,
+    Object? error,
+    StackTrace? stack,
+  }) {
+    if (_ended) return;
+    _ended = true;
+    final callback = sourceDone ? _onSourceDone : _onConsumerCancel;
+    _onFirstListen = null;
+    _onSourceDone = null;
+    _onSourceError = null;
+    _onConsumerCancel = null;
+    _input.cancel();
+    try {
+      callback?.call();
+    } finally {
+      if (notify) {
+        if (error != null) _controller.addError(error, stack);
+        unawaited(_controller.close());
+      }
+    }
   }
 }

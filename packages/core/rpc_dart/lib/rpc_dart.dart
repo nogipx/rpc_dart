@@ -9,8 +9,8 @@
 /// A transport author also imports `package:rpc_dart/transport.dart`, which
 /// re-exports this library.
 ///
-/// Every name is listed on purpose. A type missing from both lists is internal
-/// to the package, whatever its spelling.
+/// Every name is listed on purpose. The integration-only primitives have their own explicit list in
+/// `internal.dart`. Other names are internal to the package, whatever their spelling.
 ///
 /// `dart:typed_data` is re-exported whole: payloads are `Uint8List`, and the
 /// generator emits `part` files, which cannot import it themselves.
