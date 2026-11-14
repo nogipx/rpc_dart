@@ -4,6 +4,17 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 5.4.0
+
+- Add `SchemaValidationEngine.validateRecordsOrThrow` with one fresh schema
+  snapshot per collection and batch, preserving custom per-record validation.
+  Bulk upserts and snapshot import chunks use it to avoid repeated schema reads.
+- Apply journal retention once per collection in groups of up to 512 events for
+  bulk changes, deletions and imports, including partial batches that fail.
+  Each operation can temporarily retain one batch beyond its retention limit.
+- Skip rebuilding the in-memory journal cursor index when pruning removed no
+  events.
+
 ## 5.3.0
 
 - A watcher or subscriber that stops reading no longer holds every change or

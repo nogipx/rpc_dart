@@ -4,7 +4,7 @@
 
 name: rpc_data
 description: Driver-agnostic data service layer (CRUD + querying + change streams) built on rpc_dart.
-version: 5.3.0
+version: 5.4.0
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
